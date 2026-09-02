@@ -89,7 +89,18 @@ export async function saveHero(hero: Hero): Promise<Hero> {
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from('heroes').upsert(hero);
+      const payload = {
+        id: String(hero.id),
+        name: hero.name,
+        slug: hero.slug || hero.name.toLowerCase().replace(/\s+/g, '-'),
+        image_url: hero.image_url,
+        portrait_url: hero.portrait_url,
+        splash_url: hero.splash_url,
+        role: hero.role,
+        is_active: hero.is_active ?? true,
+      };
+      const { error } = await supabase.from('heroes').upsert(payload, { onConflict: 'id' });
+      if (error) console.warn('Supabase saveHero error:', error);
     } catch (e) {
       console.warn('Supabase saveHero error', e);
     }
@@ -289,6 +300,22 @@ export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
     updated = [...sponsors, { ...sponsor, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.SPONSORS, updated);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const payload = {
+        id: String(sponsor.id),
+        name: sponsor.name,
+        logo_url: sponsor.logo_url,
+        text: sponsor.text || null,
+        url: sponsor.url || null,
+        is_active: sponsor.is_active ?? true,
+      };
+      await supabase.from('sponsors').upsert(payload, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Supabase saveSponsor error', e);
+    }
+  }
   return sponsor;
 }
 
@@ -318,6 +345,20 @@ export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
     updated = [...logos, { ...logo, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.LOGOS, updated);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const payload = {
+        id: String(logo.id),
+        name: logo.name,
+        logo_url: logo.logo_url,
+        is_default: Boolean(logo.is_default),
+      };
+      await supabase.from('logos').upsert(payload, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Supabase saveLogo error', e);
+    }
+  }
   return logo;
 }
 
@@ -325,6 +366,14 @@ export async function deleteLogo(id: string): Promise<void> {
   const logos = await getLogos();
   const filtered = logos.filter((l) => l.id !== id);
   setStored(STORAGE_KEYS.LOGOS, filtered);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('logos').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Supabase deleteLogo error', e);
+    }
+  }
 }
 
 // -------------------------------------------------------------
