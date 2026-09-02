@@ -18,19 +18,34 @@ import {
 } from 'lucide-react';
 import { DEMO_MATCH_ID } from '@/config/defaultData';
 
+// Allowed system users
+const VALID_USERS: Record<string, { pass: string; role: string; displayName: string }> = {
+  admin: { pass: 'password123', role: 'admin', displayName: 'Administrator' },
+  livemedia: { pass: 'esport001', role: 'admin', displayName: 'Live Media Operator' },
+};
+
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('password123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (!cleanUser || !cleanPass) {
       setErrorMsg('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+      return;
+    }
+
+    const matchedUser = VALID_USERS[cleanUser];
+    if (!matchedUser || matchedUser.pass !== cleanPass) {
+      setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
       return;
     }
 
@@ -40,20 +55,18 @@ export default function LoginPage() {
     // Simulate authenticating to Esports Control Room
     setTimeout(() => {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('rov_auth_user', JSON.stringify({ username, role: 'admin', loggedInAt: Date.now() }));
+        localStorage.setItem(
+          'rov_auth_user',
+          JSON.stringify({
+            username: cleanUser,
+            displayName: matchedUser.displayName,
+            role: matchedUser.role,
+            loggedInAt: Date.now(),
+          })
+        );
       }
       router.push('/dashboard');
-    }, 600);
-  };
-
-  const handleQuickLogin = () => {
-    setIsLoading(true);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('rov_auth_user', JSON.stringify({ username: 'Admin', role: 'admin', loggedInAt: Date.now() }));
-    }
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 400);
+    }, 500);
   };
 
   return (
