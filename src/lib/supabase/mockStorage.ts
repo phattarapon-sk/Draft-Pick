@@ -14,6 +14,29 @@ const STORAGE_KEYS = {
   EVENTS: 'rov_esports_events',
 };
 
+// Track if Supabase network is alive to prevent blocking UI on dead URLs
+let isSupabaseFailed = false;
+
+// Safe race timeout for Supabase calls (max 2 seconds before instant fallback)
+export async function withSupabaseTimeout<T>(promise: Promise<T>, timeoutMs = 2000): Promise<T> {
+  if (isSupabaseFailed) {
+    throw new Error('Supabase marked unreachable, skipping network call.');
+  }
+
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Supabase request timeout')), timeoutMs)
+    ),
+  ]).catch((err) => {
+    // If it's a network/DNS failure, disable Supabase queries for this session
+    if (err?.message?.includes('Failed to fetch') || err?.message?.includes('timeout') || err?.message?.includes('ERR_NAME_NOT_RESOLVED')) {
+      isSupabaseFailed = true;
+    }
+    throw err;
+  });
+}
+
 // Safe browser localStorage helper
 function getStored<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
