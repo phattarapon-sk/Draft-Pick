@@ -2,7 +2,35 @@
 -- ROV Esports Draft Pick Overlay Platform - Full Setup & Fix Script
 -- =============================================================================
 
--- 1. Create Logos Table
+-- 1. Drop Foreign Key Constraints temporarily to allow type conversions
+ALTER TABLE IF EXISTS public.match_actions DROP CONSTRAINT IF EXISTS match_actions_hero_id_fkey;
+ALTER TABLE IF EXISTS public.match_actions DROP CONSTRAINT IF EXISTS match_actions_match_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_blue_team_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_red_team_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_template_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_theme_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_sponsor_id_fkey;
+ALTER TABLE IF EXISTS public.heroes DROP CONSTRAINT IF EXISTS heroes_role_check;
+
+-- 2. Alter Existing Tables to allow Text IDs (Custom & UUID compatibility)
+ALTER TABLE IF EXISTS public.heroes ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.teams ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.sponsors ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.templates ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.themes ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN blue_team_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN red_team_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN template_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN theme_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.matches ALTER COLUMN sponsor_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.match_actions ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.match_actions ALTER COLUMN match_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.match_actions ALTER COLUMN hero_id TYPE TEXT;
+ALTER TABLE IF EXISTS public.match_events ALTER COLUMN id TYPE TEXT;
+ALTER TABLE IF EXISTS public.match_events ALTER COLUMN match_id TYPE TEXT;
+
+-- 3. Create Logos Table
 CREATE TABLE IF NOT EXISTS public.logos (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -13,19 +41,7 @@ CREATE TABLE IF NOT EXISTS public.logos (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. Alter Existing Tables to allow Text IDs (if needed)
-ALTER TABLE IF EXISTS public.heroes ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.heroes DROP CONSTRAINT IF EXISTS heroes_role_check;
-ALTER TABLE IF EXISTS public.teams ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.sponsors ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.templates ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.themes ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.matches ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.match_actions ALTER COLUMN id TYPE TEXT;
-ALTER TABLE IF EXISTS public.match_actions ALTER COLUMN hero_id TYPE TEXT;
-ALTER TABLE IF EXISTS public.match_events ALTER COLUMN id TYPE TEXT;
-
--- 3. Enable RLS and Open Permissive Policies for Web App
+-- 4. Enable RLS and Open Permissive Policies for Web App
 ALTER TABLE public.logos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heroes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
@@ -60,7 +76,7 @@ CREATE POLICY "Allow All Matches" ON public.matches FOR ALL USING (true) WITH CH
 CREATE POLICY "Allow All Actions" ON public.match_actions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow All Events" ON public.match_events FOR ALL USING (true) WITH CHECK (true);
 
--- 4. Create Storage Bucket 'assets' for Image Uploads
+-- 5. Create Storage Bucket 'assets' for Image Uploads
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('assets', 'assets', true, 52428800, ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'])
 ON CONFLICT (id) DO UPDATE 
@@ -77,7 +93,7 @@ CREATE POLICY "Public Upload Assets" ON storage.objects FOR INSERT WITH CHECK ( 
 CREATE POLICY "Public Update Assets" ON storage.objects FOR UPDATE USING ( bucket_id = 'assets' );
 CREATE POLICY "Public Delete Assets" ON storage.objects FOR DELETE USING ( bucket_id = 'assets' );
 
--- 5. Seed Default Logos
+-- 6. Seed Default Logos
 INSERT INTO public.logos (id, name, type, url, is_default)
 VALUES 
 ('logo-rov-official', 'RoV Official Logo', 'official', 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&auto=format&fit=crop&q=80', true),
