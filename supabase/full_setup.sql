@@ -2,14 +2,22 @@
 -- ROV Esports Draft Pick Overlay Platform - Full Setup & Fix Script
 -- =============================================================================
 
--- 1. Drop Foreign Key Constraints temporarily to allow type conversions
+-- 1. Drop ALL possible Foreign Key Constraints to prevent type mismatch errors
+ALTER TABLE IF EXISTS public.match_events DROP CONSTRAINT IF EXISTS match_events_match_id_fkey;
+ALTER TABLE IF EXISTS public.match_events DROP CONSTRAINT IF EXISTS match_events_user_id_fkey;
 ALTER TABLE IF EXISTS public.match_actions DROP CONSTRAINT IF EXISTS match_actions_hero_id_fkey;
 ALTER TABLE IF EXISTS public.match_actions DROP CONSTRAINT IF EXISTS match_actions_match_id_fkey;
+ALTER TABLE IF EXISTS public.match_actions DROP CONSTRAINT IF EXISTS match_actions_created_by_fkey;
 ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_blue_team_id_fkey;
 ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_red_team_id_fkey;
 ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_template_id_fkey;
 ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_theme_id_fkey;
 ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_sponsor_id_fkey;
+ALTER TABLE IF EXISTS public.matches DROP CONSTRAINT IF EXISTS matches_created_by_fkey;
+ALTER TABLE IF EXISTS public.teams DROP CONSTRAINT IF EXISTS teams_created_by_fkey;
+ALTER TABLE IF EXISTS public.themes DROP CONSTRAINT IF EXISTS themes_created_by_fkey;
+ALTER TABLE IF EXISTS public.templates DROP CONSTRAINT IF EXISTS templates_created_by_fkey;
+ALTER TABLE IF EXISTS public.sponsors DROP CONSTRAINT IF EXISTS sponsors_created_by_fkey;
 ALTER TABLE IF EXISTS public.heroes DROP CONSTRAINT IF EXISTS heroes_role_check;
 
 -- 2. Alter Existing Tables to allow Text IDs (Custom & UUID compatibility)

@@ -33,13 +33,19 @@ export const HeroSelector: React.FC<HeroSelectorProps> = ({
   const [activeHeroModal, setActiveHeroModal] = useState<Hero | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Map used heroes
-  const usedHeroMap = useMemo(() => {
-    const map = new Map<string, { type: 'pick' | 'ban'; team: 'blue' | 'red' }>();
+  // Track bans and picks per team
+  const draftStatus = useMemo(() => {
+    const banned = new Set<string>();
+    const bluePicks = new Set<string>();
+    const redPicks = new Set<string>();
+
     (match.actions || []).forEach((a) => {
-      map.set(a.hero_id, { type: a.action_type, team: a.team });
+      if (a.action_type === 'ban') banned.add(a.hero_id);
+      else if (a.team === 'blue') bluePicks.add(a.hero_id);
+      else if (a.team === 'red') redPicks.add(a.hero_id);
     });
-    return map;
+
+    return { banned, bluePicks, redPicks };
   }, [match.actions]);
 
   // Filter heroes
@@ -59,8 +65,20 @@ export const HeroSelector: React.FC<HeroSelectorProps> = ({
     }
   };
 
+  const isHeroDisabled = (heroId: string) => {
+    if (disabled) return true;
+    if (draftStatus.banned.has(heroId)) return true;
+    const isPick = !match.current_phase.includes('BAN');
+    const isBlue = match.current_turn === 'blue' || match.current_phase.startsWith('BLUE_');
+    if (isPick) {
+      return isBlue ? draftStatus.bluePicks.has(heroId) : draftStatus.redPicks.has(heroId);
+    } else {
+      return draftStatus.bluePicks.has(heroId) || draftStatus.redPicks.has(heroId);
+    }
+  };
+
   const handleHeroClick = (hero: Hero) => {
-    if (disabled || usedHeroMap.has(hero.id)) return;
+    if (isHeroDisabled(hero.id)) return;
     setActiveHeroModal(hero);
   };
 
@@ -111,19 +129,22 @@ export const HeroSelector: React.FC<HeroSelectorProps> = ({
         style={{ scrollbarWidth: 'thin' }}
       >
         {filteredHeroes.map((hero) => {
-          const used = usedHeroMap.get(hero.id);
-          const isPicked = used?.type === 'pick';
-          const isBanned = used?.type === 'ban';
+          const isBanned = draftStatus.banned.has(hero.id);
+          const isDisabled = isHeroDisabled(hero.id);
+          const isBlueTurn = match.current_turn === 'blue' || match.current_phase.startsWith('BLUE_');
+          const isOpponentPicked = isBlueTurn ? draftStatus.redPicks.has(hero.id) : draftStatus.bluePicks.has(hero.id);
           const RoleIcon = RoleIcons[hero.role];
 
           return (
             <button
               key={hero.id}
               onClick={() => handleHeroClick(hero)}
-              disabled={disabled || Boolean(used)}
+              disabled={isDisabled}
               className={`relative flex-shrink-0 w-24 h-32 md:w-28 md:h-36 rounded-xl overflow-hidden border transition-all duration-200 group flex flex-col justify-end text-left ${
-                used
+                isDisabled
                   ? 'opacity-40 filter grayscale border-slate-800 cursor-not-allowed'
+                  : isOpponentPicked
+                  ? 'border-amber-500/80 hover:border-cyan-400 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,217,255,0.4)] cursor-pointer'
                   : 'border-slate-700/80 hover:border-cyan-400 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,217,255,0.4)] cursor-pointer'
               }`}
             >
@@ -143,8 +164,8 @@ export const HeroSelector: React.FC<HeroSelectorProps> = ({
                 {RoleIcon && <RoleIcon className="w-3 h-3" />}
               </div>
 
-              {/* Used Status Overlay */}
-              {used && (
+              {/* Disabled Status Overlay */}
+              {isDisabled && (
                 <div
                   className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-1 text-center backdrop-blur-[2px] ${
                     isBanned ? 'bg-red-950/70 text-red-300' : 'bg-slate-950/70 text-cyan-300'
@@ -152,7 +173,7 @@ export const HeroSelector: React.FC<HeroSelectorProps> = ({
                 >
                   {isBanned ? <Ban className="w-6 h-6 mb-1 text-red-400" /> : <Check className="w-6 h-6 mb-1 text-cyan-400" />}
                   <span className="text-[10px] font-black tracking-wider uppercase">
-                    {used.team} {used.type}
+                    {isBanned ? 'BANNED' : 'PICKED'}
                   </span>
                 </div>
               )}

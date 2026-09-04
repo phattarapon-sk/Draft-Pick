@@ -4,12 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { getTeams, saveTeam, deleteTeam } from '@/lib/supabase/mockStorage';
 import { Team } from '@/types';
 import { ImageUploader } from '@/components/common/ImageUploader';
-import { Users, Plus, Edit2, Trash2, Check, X, Shield } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Check, X, Shield, Loader2 } from 'lucide-react';
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const fetchTeams = async () => {
     const list = await getTeams();
@@ -36,10 +37,18 @@ export default function TeamsPage() {
     e.preventDefault();
     if (!editingTeam || !editingTeam.name || !editingTeam.short_name) return;
 
-    await saveTeam(editingTeam);
-    await fetchTeams();
-    setEditingTeam(null);
-    setIsNew(false);
+    setIsSaving(true);
+    try {
+      await saveTeam(editingTeam);
+      await fetchTeams();
+      setEditingTeam(null);
+      setIsNew(false);
+    } catch (err) {
+      console.error('Save team error', err);
+      alert('บันทึกข้อมูลทีมไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -49,7 +58,8 @@ export default function TeamsPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <>
+      <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div>
@@ -150,10 +160,11 @@ export default function TeamsPage() {
           </div>
         ))}
       </div>
+    </div>
 
-      {/* Edit / Create Team Modal (No Blur) */}
+      {/* Edit / Create Team Modal (Full viewport coverage) */}
       {editingTeam && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-100">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0B1020] border-2 border-cyan-500/40 rounded-2xl p-6 max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
@@ -334,17 +345,28 @@ export default function TeamsPage() {
                 <div className="pt-4 border-t border-slate-800 flex justify-end gap-3 mt-auto">
                   <button
                     type="button"
+                    disabled={isSaving}
                     onClick={() => setEditingTeam(null)}
-                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase transition-colors"
+                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase flex items-center gap-2 shadow-[0_0_15px_rgba(0,217,255,0.4)] transition-all cursor-pointer"
+                    disabled={isSaving}
+                    className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase flex items-center gap-2 shadow-[0_0_15px_rgba(0,217,255,0.4)] transition-all cursor-pointer disabled:opacity-60"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>Save Team & Roster</span>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Save Team & Roster</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -352,6 +374,6 @@ export default function TeamsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

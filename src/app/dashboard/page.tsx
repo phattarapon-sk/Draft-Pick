@@ -79,7 +79,8 @@ export default function DashboardOverviewPage() {
   }, [matches, search, statusFilter]);
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full text-slate-100 font-sans">
+    <>
+      <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full text-slate-100 font-sans">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div>
@@ -284,10 +285,11 @@ export default function DashboardOverviewPage() {
           })
         )}
       </div>
+    </div>
 
-      {/* Delete Confirmation Modal (No Blur) */}
+      {/* Delete Confirmation Modal (Full viewport coverage) */}
       {deleteConfirmMatch && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-100">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0f172a] border border-red-500/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 font-sans">
             <div className="flex items-center gap-3 border-b border-slate-700 pb-3">
               <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-500/40 flex items-center justify-center text-red-400">
@@ -322,6 +324,6 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

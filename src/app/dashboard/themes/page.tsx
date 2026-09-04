@@ -49,7 +49,8 @@ export default function ThemesPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <>
+      <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div>
@@ -155,10 +156,11 @@ export default function ThemesPage() {
           </div>
         ))}
       </div>
+    </div>
 
-      {/* Edit / Create Theme Modal */}
+      {/* Edit / Create Theme Modal (Full viewport coverage) */}
       {editingTheme && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0B1020] border border-cyan-500/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-lg font-black uppercase text-white">
@@ -275,6 +277,6 @@ export default function ThemesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

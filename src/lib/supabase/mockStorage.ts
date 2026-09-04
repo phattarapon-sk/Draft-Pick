@@ -1,5 +1,5 @@
 import { Hero, Team, Theme, Template, Sponsor, GameLogo, Match, MatchAction, MatchEvent, MatchPhase } from '@/types';
-import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS, DEFAULT_LOGOS, DEMO_MATCH, DRAFT_PHASE_ORDER, getPhaseInfo } from '@/config/defaultData';
+import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS, DEFAULT_LOGOS, DRAFT_PHASE_ORDER, getPhaseInfo } from '@/config/defaultData';
 import { supabase, isSupabaseConfigured } from './client';
 
 const STORAGE_KEYS = {
@@ -13,6 +13,25 @@ const STORAGE_KEYS = {
   ACTIONS: 'rov_esports_actions',
   EVENTS: 'rov_esports_events',
 };
+
+// One-time purge of stale mock data from browser localStorage (keeping templates & themes completely intact)
+const PURGE_KEY = 'rov_mock_purged_v5';
+if (typeof window !== 'undefined') {
+  try {
+    if (!localStorage.getItem(PURGE_KEY)) {
+      localStorage.removeItem(STORAGE_KEYS.HEROES);
+      localStorage.removeItem(STORAGE_KEYS.TEAMS);
+      localStorage.removeItem(STORAGE_KEYS.SPONSORS);
+      localStorage.removeItem(STORAGE_KEYS.LOGOS);
+      localStorage.removeItem(STORAGE_KEYS.MATCHES);
+      localStorage.removeItem(STORAGE_KEYS.ACTIONS);
+      localStorage.removeItem(STORAGE_KEYS.EVENTS);
+      localStorage.setItem(PURGE_KEY, 'true');
+    }
+  } catch (e) {
+    console.warn('One-time purge localStorage warning', e);
+  }
+}
 
 // Track if Supabase network is alive to prevent blocking UI on dead URLs
 let isSupabaseFailed = false;
@@ -49,14 +68,63 @@ function getStored<T>(key: string, fallback: T): T {
   }
 }
 
+// Safe browser localStorage helper
+export function cleanupLocalStorageQuota(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // Measure total localStorage usage
+    let totalChars = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) totalChars += (localStorage.getItem(k)?.length || 0);
+    }
+
+    // If total localStorage exceeds 2.5MB (half of browser 5MB limit), purge old bloated hero cache
+    // (Heroes are safely stored in Supabase cloud, so this frees up 3-4MB instantly)
+    if (totalChars > 2.5 * 1024 * 1024) {
+      const heroVal = localStorage.getItem('rov_esports_heroes');
+      if (heroVal && heroVal.length > 500 * 1024) {
+        localStorage.removeItem('rov_esports_heroes');
+      }
+
+      // Also clean up any giant base64 strings in matches
+      const matchVal = localStorage.getItem('rov_esports_matches');
+      if (matchVal && matchVal.length > 1.5 * 1024 * 1024) {
+        try {
+          const parsed = JSON.parse(matchVal);
+          if (Array.isArray(parsed)) {
+            // Keep recent 5 matches
+            localStorage.setItem('rov_esports_matches', JSON.stringify(parsed.slice(0, 5)));
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn('cleanupLocalStorageQuota error', e);
+  }
+}
+
+// Auto-run quota sanitization in browser
+if (typeof window !== 'undefined') {
+  setTimeout(() => cleanupLocalStorageQuota(), 50);
+}
+
 function setStored<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    // Trigger window storage event for other tabs
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue: JSON.stringify(value) }));
-  } catch (e) {
-    console.error('Error writing localStorage', key, e);
+  } catch (e: any) {
+    if (e?.name === 'QuotaExceededError' || e?.message?.includes('quota')) {
+      // Immediately free up bloated local hero cache to make room for teams / matches
+      try {
+        localStorage.removeItem('rov_esports_heroes');
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {
+        console.warn(`[Storage] Browser quota reached for ${key}.`);
+      }
+    } else {
+      console.warn('LocalStorage write notice', key, e?.message);
+    }
   }
 }
 
@@ -67,45 +135,69 @@ export async function getHeroes(): Promise<Hero[]> {
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('heroes').select('*').order('name');
-      if (!error && data && data.length > 0) return data;
+      if (!error && data) return data;
     } catch (e) {
       console.warn('Supabase getHeroes error, falling back to local', e);
     }
   }
-  return getStored<Hero[]>(STORAGE_KEYS.HEROES, DEFAULT_HEROES);
+  return getStored<Hero[]>(STORAGE_KEYS.HEROES, []);
 }
 
 export async function saveHero(hero: Hero): Promise<Hero> {
   const heroes = await getHeroes();
   const index = heroes.findIndex((h) => h.id === hero.id);
+
+  // Generate safe unique slug
+  const baseSlug = (hero.slug || hero.name.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]+/gi, '-')).replace(/^-+|-+$/g, '') || `hero-${Date.now()}`;
+  const slugExists = heroes.some((h) => h.id !== hero.id && h.slug.toLowerCase() === baseSlug.toLowerCase());
+  const safeSlug = slugExists ? `${baseSlug}-${Date.now().toString().slice(-4)}` : baseSlug;
+
+  const heroWithSafeSlug: Hero = {
+    ...hero,
+    id: String(hero.id || `hero-${Date.now()}`),
+    slug: safeSlug,
+    image_url: hero.image_url || hero.portrait_url || 'https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80',
+    portrait_url: hero.portrait_url || hero.image_url || 'https://images.unsplash.com/photo-1563089145-599997674d42?w=300&auto=format&fit=crop&q=80',
+    splash_url: hero.splash_url || hero.portrait_url || hero.image_url || 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1200&auto=format&fit=crop&q=80',
+    role: hero.role || 'Warrior',
+    is_active: hero.is_active ?? true,
+  };
+
   let updatedHeroes: Hero[];
   if (index >= 0) {
     updatedHeroes = [...heroes];
-    updatedHeroes[index] = { ...hero, updated_at: new Date().toISOString() };
+    updatedHeroes[index] = { ...heroWithSafeSlug, updated_at: new Date().toISOString() };
   } else {
-    updatedHeroes = [...heroes, { ...hero, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+    updatedHeroes = [...heroes, { ...heroWithSafeSlug, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.HEROES, updatedHeroes);
 
   if (isSupabaseConfigured && supabase) {
     try {
       const payload = {
-        id: String(hero.id),
-        name: hero.name,
-        slug: hero.slug || hero.name.toLowerCase().replace(/\s+/g, '-'),
-        image_url: hero.image_url,
-        portrait_url: hero.portrait_url,
-        splash_url: hero.splash_url,
-        role: hero.role,
-        is_active: hero.is_active ?? true,
+        id: heroWithSafeSlug.id,
+        name: heroWithSafeSlug.name,
+        slug: heroWithSafeSlug.slug,
+        image_url: heroWithSafeSlug.image_url,
+        portrait_url: heroWithSafeSlug.portrait_url,
+        splash_url: heroWithSafeSlug.splash_url,
+        role: heroWithSafeSlug.role,
+        is_active: heroWithSafeSlug.is_active,
       };
-      const { error } = await supabase.from('heroes').upsert(payload, { onConflict: 'id' });
-      if (error) console.warn('Supabase saveHero error:', error);
-    } catch (e) {
-      console.warn('Supabase saveHero error', e);
+      const { data, error } = await supabase.from('heroes').upsert(payload, { onConflict: 'id' }).select();
+      if (error) {
+        console.error('Supabase saveHero error:', error);
+        throw new Error(error.message);
+      }
+      if (data && data.length > 0) {
+        return data[0];
+      }
+    } catch (e: any) {
+      console.error('Supabase saveHero exception:', e);
+      throw e;
     }
   }
-  return hero;
+  return heroWithSafeSlug;
 }
 
 export async function deleteHero(id: string): Promise<void> {
@@ -126,76 +218,140 @@ export async function deleteHero(id: string): Promise<void> {
 // TEAMS REPOSITORY
 // -------------------------------------------------------------
 export async function getTeams(): Promise<Team[]> {
+  const localTeams = getStored<Team[]>(STORAGE_KEYS.TEAMS, []);
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('teams').select('*').order('name');
-      if (!error && data && data.length > 0) return data;
+      if (!error && data) {
+        if (data.length > 0) {
+          // Merge Supabase teams with localTeams so rosters, photos, and local custom teams are never lost
+          const merged: Team[] = data.map((sbTeam) => {
+            const local = localTeams.find(
+              (lt) =>
+                lt.id === sbTeam.id ||
+                lt.short_name?.toUpperCase() === sbTeam.short_name?.toUpperCase() ||
+                lt.name?.toLowerCase() === sbTeam.name?.toLowerCase()
+            );
+
+            // If local has newer timestamp than Supabase, preserve local branding
+            const sbTime = sbTeam.updated_at ? new Date(sbTeam.updated_at).getTime() : 0;
+            const localTime = local?.updated_at ? new Date(local.updated_at).getTime() : 0;
+            const preferred = local && localTime > sbTime ? local : sbTeam;
+
+            return {
+              ...preferred,
+              id: sbTeam.id,
+              name: preferred.name || sbTeam.name,
+              short_name: preferred.short_name || sbTeam.short_name,
+              logo_url: preferred.logo_url || sbTeam.logo_url,
+              primary_color: preferred.primary_color || sbTeam.primary_color,
+              secondary_color: preferred.secondary_color || sbTeam.secondary_color,
+              players: local?.players || preferred.players || [],
+              player_roster: local?.player_roster || preferred.player_roster || [],
+              bg_opacity: local?.bg_opacity ?? preferred.bg_opacity ?? 75,
+              updated_at: preferred.updated_at || sbTeam.updated_at || new Date().toISOString(),
+            };
+          });
+
+          // Add any local teams not present in Supabase
+          for (const lt of localTeams) {
+            if (!merged.some((m) => m.id === lt.id || m.short_name?.toUpperCase() === lt.short_name?.toUpperCase())) {
+              merged.push(lt);
+            }
+          }
+
+          setStored(STORAGE_KEYS.TEAMS, merged);
+          return merged;
+        } else {
+          return localTeams;
+        }
+      }
     } catch (e) {
       console.warn('Supabase getTeams error, falling back to local', e);
     }
   }
-  return getStored<Team[]>(STORAGE_KEYS.TEAMS, DEFAULT_TEAMS);
+  return localTeams;
 }
 
 export async function saveTeam(team: Team): Promise<Team> {
   const teams = await getTeams();
-  const index = teams.findIndex((t) => t.id === team.id);
+  const index = teams.findIndex(
+    (t) =>
+      t.id === team.id ||
+      t.short_name?.toUpperCase() === team.short_name?.toUpperCase() ||
+      t.name?.toLowerCase() === team.name?.toLowerCase()
+  );
+
+  const teamWithTimestamp: Team = {
+    ...team,
+    updated_at: new Date().toISOString(),
+  };
+
   let updated: Team[];
   if (index >= 0) {
     updated = [...teams];
-    updated[index] = { ...team, updated_at: new Date().toISOString() };
+    updated[index] = teamWithTimestamp;
   } else {
-    updated = [...teams, { ...team, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+    updated = [...teams, { ...teamWithTimestamp, created_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.TEAMS, updated);
 
-  // Sync updated team & player photos to existing matches in localStorage
+  // Sync updated team & player photos to existing matches in localStorage & API
   const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
   if (matches.length > 0) {
-    let matchesChanged = false;
-    const updatedMatches = matches.map((m) => {
+    for (const m of matches) {
       let isAffected = false;
       const copy = { ...m };
-      if (m.blue_team_id === team.id || m.blue_team?.id === team.id || m.blue_team?.name.toLowerCase() === team.name.toLowerCase()) {
-        copy.blue_team = team;
-        copy.blue_team_id = team.id;
-        copy.blue_players = team.players;
+
+      const isBlueMatch =
+        m.blue_team_id === team.id ||
+        m.blue_team?.id === team.id ||
+        m.blue_team?.short_name?.toUpperCase() === team.short_name?.toUpperCase() ||
+        m.blue_team?.name?.toLowerCase() === team.name?.toLowerCase();
+
+      const isRedMatch =
+        m.red_team_id === team.id ||
+        m.red_team?.id === team.id ||
+        m.red_team?.short_name?.toUpperCase() === team.short_name?.toUpperCase() ||
+        m.red_team?.name?.toLowerCase() === team.name?.toLowerCase();
+
+      if (isBlueMatch) {
+        copy.blue_team = teamWithTimestamp;
+        copy.blue_team_id = teamWithTimestamp.id;
+        copy.blue_players = teamWithTimestamp.players;
         isAffected = true;
       }
-      if (m.red_team_id === team.id || m.red_team?.id === team.id || m.red_team?.name.toLowerCase() === team.name.toLowerCase()) {
-        copy.red_team = team;
-        copy.red_team_id = team.id;
-        copy.red_players = team.players;
+      if (isRedMatch) {
+        copy.red_team = teamWithTimestamp;
+        copy.red_team_id = teamWithTimestamp.id;
+        copy.red_players = teamWithTimestamp.players;
         isAffected = true;
       }
+
       if (isAffected) {
-        matchesChanged = true;
-        // Dispatch real-time event for this match
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('match_updated', { detail: copy }));
-          if ('BroadcastChannel' in window) {
-            const bc = new BroadcastChannel('rov_overlay_channel');
-            bc.postMessage({ type: 'MATCH_UPDATED', match: copy });
-            bc.close();
-          }
-        }
-        return copy;
+        await saveMatch(copy);
       }
-      return m;
-    });
-    if (matchesChanged) {
-      setStored(STORAGE_KEYS.MATCHES, updatedMatches);
     }
   }
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from('teams').upsert(team);
+      const payload = {
+        id: String(teamWithTimestamp.id),
+        name: teamWithTimestamp.name,
+        short_name: teamWithTimestamp.short_name,
+        logo_url: teamWithTimestamp.logo_url,
+        primary_color: teamWithTimestamp.primary_color,
+        secondary_color: teamWithTimestamp.secondary_color,
+        updated_at: teamWithTimestamp.updated_at,
+      };
+      await supabase.from('teams').upsert(payload, { onConflict: 'id' });
     } catch (e) {
       console.warn('Supabase saveTeam error', e);
     }
   }
-  return team;
+  return teamWithTimestamp;
 }
 
 export async function deleteTeam(id: string): Promise<void> {
@@ -281,12 +437,12 @@ export async function getSponsors(): Promise<Sponsor[]> {
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('sponsors').select('*');
-      if (!error && data && data.length > 0) return data;
+      if (!error && data) return data;
     } catch (e) {
       console.warn('Supabase getSponsors error', e);
     }
   }
-  return getStored<Sponsor[]>(STORAGE_KEYS.SPONSORS, DEFAULT_SPONSORS);
+  return getStored<Sponsor[]>(STORAGE_KEYS.SPONSORS, []);
 }
 
 export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
@@ -326,12 +482,17 @@ export async function getLogos(): Promise<GameLogo[]> {
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('logos').select('*');
-      if (!error && data && data.length > 0) return data;
+      if (!error && data) {
+        return data.map((l: any) => ({
+          ...l,
+          logo_url: l.logo_url || l.url || '',
+        }));
+      }
     } catch (e) {
       console.warn('Supabase getLogos error', e);
     }
   }
-  return getStored<GameLogo[]>(STORAGE_KEYS.LOGOS, DEFAULT_LOGOS);
+  return getStored<GameLogo[]>(STORAGE_KEYS.LOGOS, []);
 }
 
 export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
@@ -351,7 +512,7 @@ export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
       const payload = {
         id: String(logo.id),
         name: logo.name,
-        logo_url: logo.logo_url,
+        url: logo.logo_url,
         is_default: Boolean(logo.is_default),
       };
       await supabase.from('logos').upsert(payload, { onConflict: 'id' });
@@ -380,22 +541,45 @@ export async function deleteLogo(id: string): Promise<void> {
 // MATCHES & ACTIONS REPOSITORY
 // -------------------------------------------------------------
 export async function getMatches(): Promise<Match[]> {
+  const localMatches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
-      if (!error && data && data.length > 0) return data;
+      if (!error && data) {
+        if (data.length > 0) {
+          // Merge with local matches so actions and fresh local updates are never lost
+          return data.map((sbMatch) => {
+            const local = localMatches.find((lm) => lm.id === sbMatch.id);
+            const sbTime = sbMatch.updated_at ? new Date(sbMatch.updated_at).getTime() : 0;
+            const localTime = local?.updated_at ? new Date(local.updated_at).getTime() : 0;
+            if (local && localTime > sbTime) {
+              return local;
+            }
+            return {
+              ...sbMatch,
+              actions: sbMatch.actions && sbMatch.actions.length > 0 ? sbMatch.actions : local?.actions || [],
+            };
+          });
+        } else {
+          return localMatches;
+        }
+      }
     } catch (e) {
       console.warn('Supabase getMatches error', e);
     }
   }
-  const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, [DEMO_MATCH]);
-  return matches;
+  return localMatches;
 }
 
 export async function getMatchById(id: string): Promise<Match | null> {
   let match: Match | null = null;
 
-  // Try fetching from server API first (for OBS Browser Source real-time sync across processes)
+  // 1. Check local storage first
+  const localMatches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
+  const local = localMatches.find((m) => m.id === id) || null;
+
+  // 2. Try fetching from server API (for OBS Browser Source real-time sync across processes)
   if (typeof window !== 'undefined') {
     try {
       const res = await fetch(`/api/matches/${id}`, { cache: 'no-store' });
@@ -408,10 +592,23 @@ export async function getMatchById(id: string): Promise<Match | null> {
     }
   }
 
-  // Fallback to local storage
+  // 3. Reconcile with local storage: local takes precedence if newer or if API was stale
+  if (local) {
+    if (!match) {
+      match = local;
+    } else {
+      const localTime = local.updated_at ? new Date(local.updated_at).getTime() : 0;
+      const serverTime = match.updated_at ? new Date(match.updated_at).getTime() : 0;
+      if (localTime > serverTime) {
+        match = local;
+      }
+    }
+  }
+
+  // 4. Fallback to getMatches() if still not found
   if (!match) {
     const matches = await getMatches();
-    match = matches.find((m) => m.id === id) || (id === DEMO_MATCH.id ? DEMO_MATCH : null);
+    match = matches.find((m) => m.id === id) || null;
   }
 
   if (!match) return null;
@@ -425,8 +622,19 @@ export async function getMatchById(id: string): Promise<Match | null> {
     getHeroes(),
   ]);
 
-  const blue_team = (match?.blue_team_id ? teams.find((t) => t.id === match.blue_team_id) : null) || match.blue_team;
-  const red_team = (match?.red_team_id ? teams.find((t) => t.id === match.red_team_id) : null) || match.red_team;
+  const findTeamForMatch = (teamId?: string, fallbackTeam?: Team): Team | undefined => {
+    if (!teamId && !fallbackTeam) return undefined;
+    return (
+      teams.find((t) => t.id === teamId) ||
+      teams.find((t) => fallbackTeam?.id && t.id === fallbackTeam.id) ||
+      teams.find((t) => fallbackTeam?.short_name && t.short_name?.toUpperCase() === fallbackTeam.short_name?.toUpperCase()) ||
+      teams.find((t) => fallbackTeam?.name && t.name?.toLowerCase() === fallbackTeam.name?.toLowerCase()) ||
+      fallbackTeam
+    );
+  };
+
+  const blue_team = findTeamForMatch(match?.blue_team_id, match?.blue_team);
+  const red_team = findTeamForMatch(match?.red_team_id, match?.red_team);
   const template = templates.find((t) => t.id === match?.template_id) || DEFAULT_TEMPLATES[0];
   const theme = themes.find((t) => t.id === match?.theme_id) || DEFAULT_THEMES[0];
   const sponsor = sponsors.find((s) => s.id === match?.sponsor_id);
@@ -467,14 +675,21 @@ export async function saveMatch(match: Match): Promise<Match> {
   }
   setStored(STORAGE_KEYS.MATCHES, updated);
 
-  // Sync to Next.js server API
+  // Sync to Next.js server API FIRST so any subsequent fetches get fresh data
   if (typeof window !== 'undefined') {
-    fetch(`/api/matches/${match.id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch((e) => console.warn('Failed to sync match to API', e));
+    try {
+      await fetch(`/api/matches/${match.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      console.warn('Failed to sync match to API', e);
+    }
   }
+
+  // Broadcast update immediately to avoid UI delay / flicker
+  broadcastMatchUpdate(payload);
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -500,8 +715,6 @@ export async function saveMatch(match: Match): Promise<Match> {
     }
   }
 
-  // Broadcast update
-  broadcastMatchUpdate(payload);
   return payload;
 }
 
@@ -527,9 +740,9 @@ export async function clearSlotHero(
   team: 'blue' | 'red',
   actionType: 'pick' | 'ban',
   slotIndex: number
-): Promise<Match> {
+): Promise<{ success: boolean; match?: Match }> {
   const match = await getMatchById(matchId);
-  if (!match) throw new Error('Match not found');
+  if (!match) return { success: false };
 
   const filteredActions = (match.actions || []).filter(
     (a) => !(a.team === team && a.action_type === actionType && a.slot_index === slotIndex)
@@ -541,7 +754,9 @@ export async function clearSlotHero(
     updated_at: new Date().toISOString(),
   };
 
-  return await saveMatch(updatedMatch);
+  logMatchEvent(matchId, 'UNDO_ACTION', { clearedSlot: { team, actionType, slotIndex } });
+  const saved = await saveMatch(updatedMatch);
+  return { success: true, match: saved };
 }
 export async function executeDraftAction(
   matchId: string,
@@ -565,11 +780,41 @@ export async function executeDraftAction(
     slotIndex = existing.length;
   }
 
-  // 1. Check if hero is already picked or banned in this match
-  const alreadyUsed = (match.actions || []).some((a) => a.hero_id === heroId);
-  if (alreadyUsed) {
-    return { success: false, message: 'Hero is already picked or banned in this match!' };
+  // VALIDATION RULES:
+  // 1. Picks: Opponent CAN pick duplicate (Mirror Pick), but same team CANNOT pick duplicate.
+  //    Banned hero cannot be picked by anyone.
+  if (actionType === 'pick') {
+    const isBanned = (match.actions || []).some((a) => a.action_type === 'ban' && a.hero_id === heroId);
+    if (isBanned) {
+      return { success: false, message: 'ฮีโร่ตัวนี้ถูกแบนแล้ว ไม่สามารถเลือกได้!' };
+    }
+
+    const isPickedBySameTeam = (match.actions || []).some(
+      (a) => a.team === team && a.action_type === 'pick' && a.hero_id === heroId && a.slot_index !== slotIndex
+    );
+    if (isPickedBySameTeam) {
+      return { success: false, message: 'ทีมของคุณเลือกฮีโร่ตัวนี้ไปแล้ว ไม่สามารถเลือกซ้ำในทีมเดียวกันได้!' };
+    }
+  } else if (actionType === 'ban') {
+    // 2. Bans: Cannot ban a hero that is already banned or already picked
+    const isAlreadyBanned = (match.actions || []).some(
+      (a) => a.action_type === 'ban' && a.hero_id === heroId && !(a.team === team && a.slot_index === slotIndex)
+    );
+    if (isAlreadyBanned) {
+      return { success: false, message: 'ฮีโร่ตัวนี้ถูกแบนไปแล้ว!' };
+    }
+
+    const isAlreadyPicked = (match.actions || []).some(
+      (a) => a.action_type === 'pick' && a.hero_id === heroId
+    );
+    if (isAlreadyPicked) {
+      return { success: false, message: 'ฮีโร่ตัวนี้ถูกเลือกไปแล้ว ไม่สามารถแบนได้!' };
+    }
   }
+
+  // Resolve hero details so newAction is fully self-contained immediately
+  const allHeroes = await getHeroes();
+  const heroObj = allHeroes.find((h) => h.id === heroId) || DEFAULT_HEROES.find((h) => h.id === heroId);
 
   // 2. Create MatchAction
   const newAction: MatchAction = {
@@ -578,12 +823,17 @@ export async function executeDraftAction(
     team: team as 'blue' | 'red',
     action_type: actionType,
     hero_id: heroId,
+    hero: heroObj,
     slot_index: slotIndex,
     phase: match.current_phase,
     created_at: new Date().toISOString(),
   };
 
-  const updatedActions = [...(match.actions || []), newAction];
+  // Replace any existing action for this exact slot (in case of re-pick or slot overwrite)
+  const remainingActions = (match.actions || []).filter(
+    (a) => !(a.team === team && a.action_type === actionType && a.slot_index === slotIndex)
+  );
+  const updatedActions = [...remainingActions, newAction];
 
   // 3. Do not auto-advance to next slot's frame; set to WAITING so operator manually chooses the slot
   const nextPhase: MatchPhase = 'WAITING';
@@ -672,12 +922,8 @@ export async function swapTeamSides(
     updatedPhase = 'WAITING';
     updatedTurn = 'blue';
   } else {
-    // When swapping teams but keeping existing picks, swap action teams so picks follow the teams
-    updatedActions = updatedActions.map((a) => ({
-      ...a,
-      team: (a.team === 'blue' ? 'red' : 'blue') as 'blue' | 'red',
-    }));
-
+    // When swapping teams without resetting, user wants the hero positions to STAY in their original slots on the screen!
+    // So updatedActions does NOT swap teams. Only the team names, logos, scores, and rosters swap sides.
     if (updatedPhase.startsWith('BLUE_')) {
       updatedPhase = updatedPhase.replace('BLUE_', 'RED_') as MatchPhase;
     } else if (updatedPhase.startsWith('RED_')) {

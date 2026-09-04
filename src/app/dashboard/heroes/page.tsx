@@ -33,6 +33,7 @@ import {
   Award,
   Layers,
   Settings2,
+  Loader2,
 } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 16;
@@ -81,6 +82,7 @@ export default function HeroesPage() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [editingHero, setEditingHero] = useState<Hero | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Category Manager Modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -188,17 +190,35 @@ export default function HeroesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingHero || !editingHero.name) return;
+    if (!editingHero || !editingHero.name.trim()) {
+      alert('กรุณากรอกชื่อฮีโร่');
+      return;
+    }
 
-    const heroToSave = {
-      ...editingHero,
-      slug: editingHero.slug || editingHero.name.toLowerCase().replace(/\s+/g, '-'),
-    };
+    setIsSaving(true);
+    try {
+      const heroToSave = {
+        ...editingHero,
+        name: editingHero.name.trim(),
+        slug: editingHero.slug || editingHero.name.trim().toLowerCase().replace(/\s+/g, '-'),
+      };
 
-    await saveHero(heroToSave);
-    await fetchHeroes();
-    setEditingHero(null);
-    setIsNew(false);
+      const savedHero = await saveHero(heroToSave);
+      await fetchHeroes();
+
+      // Show the newly saved hero right away
+      setSearch(savedHero.name);
+      setSelectedRole('ALL');
+      setCurrentPage(1);
+
+      setEditingHero(null);
+      setIsNew(false);
+    } catch (err: any) {
+      console.error('Save hero failed:', err);
+      alert(`ไม่สามารถบันทึกฮีโร่ได้: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -213,7 +233,8 @@ export default function HeroesPage() {
   };
 
   return (
-    <div className="p-3 md:p-4 space-y-2.5 max-w-full mx-auto w-full text-white flex flex-col justify-between min-h-full font-sans">
+    <>
+      <div className="p-3 md:p-4 space-y-2.5 max-w-full mx-auto w-full text-white flex flex-col justify-between min-h-full font-sans">
       {/* Top Section: Header + Filter */}
       <div className="space-y-2.5">
         {/* Header */}
@@ -439,10 +460,11 @@ export default function HeroesPage() {
           </div>
         </div>
       )}
+    </div>
 
-      {/* DEDICATED MODAL: CATEGORY & ROLE MANAGER WITH ICON PICKER (No Blur) */}
+      {/* DEDICATED MODAL: CATEGORY & ROLE MANAGER WITH ICON PICKER (Full viewport coverage) */}
       {showCategoryModal && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-100">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0f172a] border border-cyan-500/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto font-sans">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
@@ -573,9 +595,9 @@ export default function HeroesPage() {
         </div>
       )}
 
-      {/* Edit / Create Clean Popup Modal (No Blur) */}
+      {/* Edit / Create Clean Popup Modal (Full viewport coverage) */}
       {editingHero && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-100">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto font-sans">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
@@ -687,16 +709,26 @@ export default function HeroesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs uppercase shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs uppercase shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>บันทึกฮีโร่</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังบันทึก...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>บันทึกฮีโร่</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

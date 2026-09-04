@@ -3,7 +3,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Match, Hero } from '@/types';
-import { Ban, Clock } from 'lucide-react';
+import { Ban } from 'lucide-react';
 
 interface RPLBroadcastDockProps {
   match: Match;
@@ -42,8 +42,6 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
   const bluePlayers = match.blue_players?.length === 5 ? match.blue_players : ['SRY','EREZ','FAKEPLAYZ','MOOP','DIFOXN'];
   const redPlayers = match.red_players?.length === 5 ? match.red_players : ['NOARJE','SHARKZ','AGETSIVE','OVERONE','ASHEARTH'];
 
-  const formattedTimer = `00:${match.timer_seconds.toString().padStart(2, '0')}`;
-  const isUrgent = match.timer_seconds <= 10 && match.timer_seconds > 0;
   const isBlueTurn = match.current_turn === 'blue';
   const boFormat = match.bo_format || 'BO 5';
 
@@ -268,15 +266,7 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
               </span>
             </div>
 
-            {/* Timer */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <Clock className={`w-4 h-4 ${isUrgent ? 'text-red-400 animate-spin' : isBlueTurn ? 'text-cyan-400' : 'text-rose-400'}`} />
-              <span className={`text-xl font-mono font-black tracking-wider ${
-                isUrgent ? 'text-red-400' : isBlueTurn ? 'text-cyan-300' : 'text-rose-300'
-              }`}>
-                {formattedTimer}
-              </span>
-            </div>
+
 
             {/* Sponsor Carousel (Bottom) */}
             <div className="w-full py-2 px-3 rounded-lg bg-white border border-slate-200 shadow-lg flex items-center justify-center overflow-hidden min-h-[40px]">

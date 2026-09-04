@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS, DEFAULT_LOGOS, DEMO_MATCH } from '@/config/defaultData';
+import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS, DEFAULT_LOGOS } from '@/config/defaultData';
 import {
   Settings,
   Volume2,
@@ -94,7 +94,7 @@ export default function SettingsPage() {
         templates: JSON.parse(localStorage.getItem('rov_esports_templates') || JSON.stringify(DEFAULT_TEMPLATES)),
         sponsors: JSON.parse(localStorage.getItem('rov_esports_sponsors') || JSON.stringify(DEFAULT_SPONSORS)),
         logos: JSON.parse(localStorage.getItem('rov_esports_logos') || JSON.stringify(DEFAULT_LOGOS)),
-        matches: JSON.parse(localStorage.getItem('rov_esports_matches') || JSON.stringify([DEMO_MATCH])),
+        matches: JSON.parse(localStorage.getItem('rov_esports_matches') || '[]'),
         exported_at: new Date().toISOString(),
       };
 
@@ -142,7 +142,7 @@ export default function SettingsPage() {
     localStorage.setItem('rov_esports_templates', JSON.stringify(DEFAULT_TEMPLATES));
     localStorage.setItem('rov_esports_sponsors', JSON.stringify(DEFAULT_SPONSORS));
     localStorage.setItem('rov_esports_logos', JSON.stringify(DEFAULT_LOGOS));
-    localStorage.setItem('rov_esports_matches', JSON.stringify([DEMO_MATCH]));
+    localStorage.setItem('rov_esports_matches', JSON.stringify([]));
     setResetSuccess(true);
     setTimeout(() => setResetSuccess(false), 2000);
   };

@@ -16,7 +16,6 @@ import {
   Play,
   Zap,
 } from 'lucide-react';
-import { DEMO_MATCH_ID } from '@/config/defaultData';
 
 // Allowed system users
 const VALID_USERS: Record<string, { pass: string; role: string; displayName: string }> = {

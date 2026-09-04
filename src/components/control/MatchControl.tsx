@@ -3,11 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { Match, Hero, MatchPhase, Sponsor, GameLogo } from '@/types';
 import { DRAFT_PHASE_ORDER } from '@/config/defaultData';
-import { executeDraftAction, undoLastAction, resetMatchDraft, updateMatchTimer, updateMatchScores, updateMatchPhase, swapTeamSides, getLogos } from '@/lib/supabase/mockStorage';
+import { executeDraftAction, clearSlotHero, undoLastAction, resetMatchDraft, updateMatchScores, updateMatchPhase, swapTeamSides, getLogos } from '@/lib/supabase/mockStorage';
 import { uploadImageFile } from '@/lib/uploadService';
 import { ImageUploader } from '@/components/common/ImageUploader';
 import { PickBanControl } from './PickBanControl';
-import { TimerControl } from './TimerControl';
 import { OBSInstructions } from './OBSInstructions';
 import { OverlayRenderer } from '@/components/overlay/OverlayRenderer';
 import { RotateCcw, Undo2, Video, Eye, EyeOff, Plus, Minus, CheckCircle, Radio, Upload, Trophy, Sparkles, Settings, SlidersHorizontal, Layout, Layers, Palette, Check, ArrowLeftRight, AlertTriangle } from 'lucide-react';
@@ -85,6 +84,9 @@ export const MatchControl: React.FC<MatchControlProps> = ({
     setIsProcessing(true);
     try {
       const res = await executeDraftAction(match.id, heroId, actionType, undefined, team);
+      if (res.success && res.match && onMatchUpdated) {
+        onMatchUpdated(res.match);
+      }
       if (!res.success && res.message) {
         alert(res.message);
       }
@@ -100,8 +102,26 @@ export const MatchControl: React.FC<MatchControlProps> = ({
     setIsProcessing(true);
     try {
       const res = await executeDraftAction(match.id, heroId, type, slotIndex, team);
+      if (res.success && res.match && onMatchUpdated) {
+        onMatchUpdated(res.match);
+      }
       if (!res.success && res.message) {
         alert(res.message);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle slot clearing
+  const handleClearSlot = async (team: 'blue' | 'red', type: 'pick' | 'ban', slotIndex: number) => {
+    setIsProcessing(true);
+    try {
+      const res = await clearSlotHero(match.id, team, type, slotIndex);
+      if (res.success && res.match && onMatchUpdated) {
+        onMatchUpdated(res.match);
       }
     } catch (e) {
       console.error(e);
@@ -114,7 +134,10 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   const handleUndo = async () => {
     setIsProcessing(true);
     try {
-      await undoLastAction(match.id);
+      const res = await undoLastAction(match.id);
+      if (res.success && res.match && onMatchUpdated) {
+        onMatchUpdated(res.match);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -140,19 +163,6 @@ export const MatchControl: React.FC<MatchControlProps> = ({
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  // Timer controls
-  const handleToggleTimer = async () => {
-    await updateMatchTimer(match.id, match.timer_seconds, !match.timer_running);
-  };
-
-  const handleResetTimer = async () => {
-    await updateMatchTimer(match.id, 30, match.timer_running);
-  };
-
-  const handleAdjustTimer = async (delta: number) => {
-    await updateMatchTimer(match.id, Math.max(0, match.timer_seconds + delta), match.timer_running);
   };
 
   // Score controls
@@ -329,14 +339,6 @@ export const MatchControl: React.FC<MatchControlProps> = ({
             </div>
           </div>
 
-          {/* Timer Control Bar (placed together after Scores) */}
-          <TimerControl
-            seconds={match.timer_seconds}
-            isRunning={match.timer_running}
-            onTogglePlay={handleToggleTimer}
-            onReset={handleResetTimer}
-            onAdjustTime={handleAdjustTimer}
-          />
         </div>
       </header>
 
@@ -365,6 +367,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
           heroes={heroes}
           isCompact={showLivePreview}
           onDirectAssign={handleDirectAssign}
+          onClearSlot={handleClearSlot}
         />
       </main>
 
@@ -377,7 +380,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
 
       {/* Sponsor Multi-Select Carousel Modal */}
       {showSponsorModal && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 w-screen h-screen z-[10050] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-100">
           <div className="w-full max-w-lg bg-[#0a0f1e] border-2 border-amber-500/50 rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -528,7 +531,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
 
       {/* Modal: Logo Management Selector */}
       {showLogoModal && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 w-screen h-screen z-[10050] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-100">
           <div className="w-full max-w-xl bg-[#0a0f1e] border-2 border-yellow-500/50 rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -620,7 +623,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
 
       {/* Modal: Live Broadcast Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 w-screen h-screen z-[9990] bg-black/75 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl bg-[#0f172a] border border-slate-700 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
@@ -877,7 +880,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
 
       {/* Modal: Custom Team Side Swap Modal */}
       {showSwapModal && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 w-screen h-screen z-[10050] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-100">
           <div className="w-full max-w-lg bg-[#0f172a] border border-slate-700 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 font-sans">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">

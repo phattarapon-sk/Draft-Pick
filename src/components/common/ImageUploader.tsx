@@ -29,13 +29,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input value so re-uploading the same file works
+    e.target.value = '';
+
     setIsUploading(true);
     try {
       const url = await uploadImageFile(file, bucket);
       onChange(url);
-    } catch (err) {
+    } catch (err: any) {
       console.error('File upload failed', err);
-      alert('Failed to process image file.');
+      alert(`อัปโหลดรูปภาพไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`);
     } finally {
       setIsUploading(false);
     }

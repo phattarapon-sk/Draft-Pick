@@ -64,7 +64,8 @@ export default function SponsorsPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full text-slate-100 font-sans">
+    <>
+      <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full text-slate-100 font-sans">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div>
@@ -219,10 +220,11 @@ export default function SponsorsPage() {
           </table>
         </div>
       </div>
+    </div>
 
-      {/* Edit / Create Fullscreen Modal (No Blur) */}
+      {/* Edit / Create Fullscreen Modal (Full viewport coverage) */}
       {editingSponsor && (
-        <div className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-100">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-full h-full min-h-screen z-[9999] !m-0 !p-4 flex items-center justify-center bg-black/80">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
@@ -319,6 +321,6 @@ export default function SponsorsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

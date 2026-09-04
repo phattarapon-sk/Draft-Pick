@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS, DEMO_MATCH } from '@/config/defaultData';
+import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS } from '@/config/defaultData';
 import { Match } from '@/types';
 
 declare global {
@@ -9,13 +9,12 @@ declare global {
 
 if (!globalThis.__SERVER_MATCHES__) {
   globalThis.__SERVER_MATCHES__ = new Map<string, Match>();
-  globalThis.__SERVER_MATCHES__.set(DEMO_MATCH.id, DEMO_MATCH);
 }
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const matchId = params.id;
   const store = globalThis.__SERVER_MATCHES__!;
-  const match = store.get(matchId) || (matchId === DEMO_MATCH.id ? DEMO_MATCH : null);
+  const match = store.get(matchId) || null;
 
   if (!match) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
@@ -30,7 +29,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
   const actions = (match.actions || []).map((action) => ({
     ...action,
-    hero: DEFAULT_HEROES.find((h) => h.id === action.hero_id),
+    hero: action.hero || DEFAULT_HEROES.find((h) => h.id === action.hero_id),
   }));
 
   return NextResponse.json({

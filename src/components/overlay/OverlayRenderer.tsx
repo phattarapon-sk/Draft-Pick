@@ -5,7 +5,6 @@ import { Match, Hero } from '@/types';
 import { Background } from './Background';
 import { TeamPanel } from './TeamPanel';
 import { HeroSlot } from './HeroSlot';
-import { DraftTimer } from './DraftTimer';
 import { DraftPhase } from './DraftPhase';
 import { Sponsor } from './Sponsor';
 import { getPhaseInfo, DEFAULT_TEMPLATES, DEFAULT_THEMES } from '@/config/defaultData';
@@ -148,15 +147,7 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
               score={match.red_score}
             />
 
-            {/* 4. Timer & Phase */}
-            <DraftTimer
-              position={config.timer}
-              seconds={match.timer_seconds}
-              isRunning={match.timer_running}
-              currentTurn={match.current_turn}
-              phaseType={phaseInfo.type}
-              boFormat={match.bo_format || 'BO 3'}
-            />
+            {/* 4. Phase Indicator */}
             <DraftPhase
               position={config.phaseIndicator}
               phase={match.current_phase}
