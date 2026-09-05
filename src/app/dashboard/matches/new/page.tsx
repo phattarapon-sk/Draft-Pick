@@ -255,41 +255,41 @@ export default function CreateMatchPage() {
           )}
         </div>
 
-        {/* Sponsor Showcase Multi-Select Carousel */}
-        <div className="pt-2 border-t border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div>
-              <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
-                Sponsor Showcase (เลือกสปอนเซอร์หมุนเวียนบน Overlay)
-              </label>
-              <p className="text-[11px] text-slate-400">
-                เลือกสปอนเซอร์ที่ต้องการให้แสดงในห้องนี้ ระบบจะสลับแสดงทุก ๆ 3 วินาทีแบบวนซ้ำ (เลือกได้หลายแบรนด์)
-              </p>
-            </div>
+        {/* Sponsor Showcase Multi-Select Carousel (Compact Chips) */}
+        <div className="pt-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2">
+              <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+                Sponsor Showcase
+              </label>
+              <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                เลือกแล้ว {selectedSponsorIds.length} / {sponsors.length} แบรนด์ (สลับทุก 3 วิ)
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setSelectedSponsorIds(sponsors.map((s) => s.id))}
-                className="px-2.5 py-1 text-xs rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900 transition-all font-mono font-bold"
+                className="px-2 py-0.5 text-[10px] rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900 transition-all font-mono font-bold"
               >
-                เลือกทั้งหมด ({sponsors.length})
+                เลือกทั้งหมด
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedSponsorIds([])}
-                className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-all font-mono"
+                className="px-2 py-0.5 text-[10px] rounded-md bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-all font-mono"
               >
-                ไม่เลือกสปอนเซอร์
+                ล้าง
               </button>
             </div>
           </div>
 
           {sponsors.length === 0 ? (
-            <div className="p-4 rounded-xl border border-dashed border-slate-800 bg-slate-900/50 text-center text-xs text-slate-400">
-              ยังไม่มีข้อมูลสปอนเซอร์ในระบบ สามารถเพิ่มสปอนเซอร์ใหม่ได้ที่เมนู Sponsors ด้านซ้าย
+            <div className="py-2.5 px-3 rounded-lg border border-dashed border-slate-800 bg-slate-900/40 text-center text-xs text-slate-400">
+              ยังไม่มีข้อมูลสปอนเซอร์ในระบบ (สามารถเพิ่มได้ที่เมนู Sponsors ด้านซ้าย)
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {sponsors.map((sp) => {
                 const isSelected = selectedSponsorIds.includes(sp.id);
                 return (
@@ -301,14 +301,14 @@ export default function CreateMatchPage() {
                         isSelected ? prev.filter((id) => id !== sp.id) : [...prev, sp.id]
                       );
                     }}
-                    className={`p-3 rounded-xl border-2 flex items-center gap-3 text-left transition-all ${
+                    className={`px-2.5 py-1.5 rounded-lg border flex items-center gap-2 text-left transition-all ${
                       isSelected
-                        ? 'bg-amber-950/40 border-amber-400/90 shadow-[0_0_15px_rgba(251,191,36,0.25)]'
-                        : 'bg-slate-900 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'
+                        ? 'bg-amber-950/30 border-amber-400/70 text-amber-200'
+                        : 'bg-slate-900/80 border-slate-800 text-slate-400 opacity-60 hover:opacity-100 hover:border-slate-700'
                     }`}
                   >
                     <div
-                      className={`w-5 h-5 rounded-md flex items-center justify-center border text-xs font-black ${
+                      className={`w-3.5 h-3.5 rounded flex items-center justify-center border text-[9px] font-black shrink-0 ${
                         isSelected
                           ? 'bg-amber-400 border-amber-400 text-black'
                           : 'border-slate-600 bg-slate-800 text-transparent'
@@ -321,23 +321,17 @@ export default function CreateMatchPage() {
                       <img
                         src={sp.logo_url}
                         alt={sp.name}
-                        className="w-8 h-8 object-contain filter drop-shadow rounded bg-black/40 p-0.5"
+                        className="w-5 h-5 object-contain filter drop-shadow rounded bg-black/40 p-0.5 shrink-0"
                       />
                     )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-white truncate">{sp.name}</div>
-                      <div className="text-[10px] font-mono text-amber-400/80 truncate">
-                        {sp.text || 'OFFICIAL PARTNER'}
-                      </div>
-                    </div>
+                    <span className="text-xs font-semibold truncate text-white">
+                      {sp.name}
+                    </span>
                   </button>
                 );
               })}
             </div>
           )}
-          <div className="text-[11px] text-cyan-400/90 font-mono mt-2">
-            * สปอนเซอร์ที่เลือกแสดง: <strong>{selectedSponsorIds.length}</strong> / {sponsors.length} แบรนด์
-          </div>
         </div>
 
         {/* Center Tournament Logo */}
