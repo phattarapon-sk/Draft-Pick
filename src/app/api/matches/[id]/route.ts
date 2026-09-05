@@ -23,7 +23,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   // Hydrate teams, templates, themes
   const blue_team = DEFAULT_TEAMS.find((t) => t.id === match.blue_team_id);
   const red_team = DEFAULT_TEAMS.find((t) => t.id === match.red_team_id);
-  const template = DEFAULT_TEMPLATES.find((t) => t.id === match.template_id) || DEFAULT_TEMPLATES[0];
+  const defaultTpl = DEFAULT_TEMPLATES.find((t) => t.id === match.template_id || t.slug === match.template?.slug);
+  const template = defaultTpl || match.template || DEFAULT_TEMPLATES[0];
   const theme = DEFAULT_THEMES.find((t) => t.id === match.theme_id) || DEFAULT_THEMES[0];
   const sponsor = DEFAULT_SPONSORS.find((s) => s.id === match.sponsor_id);
 
@@ -37,7 +38,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       ...match,
       blue_team: match.blue_team || blue_team,
       red_team: match.red_team || red_team,
-      template: match.template || template,
+      template: template,
       theme: match.theme || theme,
       sponsor: match.sponsor || sponsor,
       actions,

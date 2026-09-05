@@ -402,10 +402,16 @@ export async function getTemplates(): Promise<Template[]> {
       const { data, error } = await supabase.from('templates').select('*');
       if (!error && data && data.length > 0) {
         return data.map((t) => {
-          const defaultT = DEFAULT_TEMPLATES.find((dt) => dt.id === t.id || dt.slug === t.slug) || DEFAULT_TEMPLATES[0];
+          const defaultT = DEFAULT_TEMPLATES.find((dt) => dt.id === t.id || dt.slug === t.slug);
+          if (defaultT) {
+            return {
+              ...t,
+              config: defaultT.config,
+            };
+          }
           return {
             ...t,
-            config: t.config && t.config.heroSlots && t.config.heroSlots.length > 0 ? t.config : defaultT.config,
+            config: t.config && t.config.heroSlots && t.config.heroSlots.length > 0 ? t.config : DEFAULT_TEMPLATES[0].config,
           };
         });
       }
@@ -635,7 +641,8 @@ export async function getMatchById(id: string): Promise<Match | null> {
 
   const blue_team = findTeamForMatch(match?.blue_team_id, match?.blue_team);
   const red_team = findTeamForMatch(match?.red_team_id, match?.red_team);
-  const template = templates.find((t) => t.id === match?.template_id) || DEFAULT_TEMPLATES[0];
+  const defaultTpl = DEFAULT_TEMPLATES.find((t) => t.id === match?.template_id || t.slug === match?.template?.slug || t.id === match?.template?.id);
+  const template = defaultTpl || templates.find((t) => t.id === match?.template_id) || DEFAULT_TEMPLATES[0];
   const theme = themes.find((t) => t.id === match?.theme_id) || DEFAULT_THEMES[0];
   const sponsor = sponsors.find((s) => s.id === match?.sponsor_id);
   const sponsors_list = match?.sponsor_ids && match.sponsor_ids.length > 0
