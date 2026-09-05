@@ -5,7 +5,7 @@ import { Match, Hero } from '@/types';
 import { Background } from './Background';
 import { TeamPanel } from './TeamPanel';
 import { HeroSlot } from './HeroSlot';
-import { DraftPhase } from './DraftPhase';
+import { DraftTimer } from './DraftTimer';
 import { Sponsor } from './Sponsor';
 import { getPhaseInfo, DEFAULT_TEMPLATES, DEFAULT_THEMES } from '@/config/defaultData';
 import { Swords } from 'lucide-react';
@@ -27,7 +27,11 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
   const [scale, setScale] = useState<number>(1);
 
   const defaultTpl = DEFAULT_TEMPLATES.find(
-    (dt) => dt.id === match.template_id || dt.id === match.template?.id || dt.slug === match.template?.slug
+    (dt) =>
+      dt.id === match.template_id ||
+      dt.id === match.template?.id ||
+      dt.slug === match.template?.slug ||
+      (match.template_id === 'template-standard-16-9' && dt.slug === 'standard-16-9')
   );
   const template = defaultTpl || match.template || DEFAULT_TEMPLATES[0];
   const theme = match.theme || DEFAULT_THEMES[0];
@@ -77,14 +81,20 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
   const phaseInfo = getPhaseInfo(match.current_phase);
   
   // Decide layout mode: RPL Bottom Dock vs Standard Full Screen 16:9
-  const isStandardFullScreen =
-    match.template_id === '71111111-1111-1111-1111-111111111111' ||
-    match.template_id === 'template-standard-16-9' ||
-    template?.slug === 'standard-16-9' ||
-    template?.slug === 'standard-tournament-16-9' ||
-    template?.id === '71111111-1111-1111-1111-111111111111';
+  const isRPLHalfScreen =
+    match.template_id === 'template-rpl-official' ||
+    match.template_id === 'template-half-screen-caster' ||
+    template?.slug === 'rpl-official-dock' ||
+    template?.slug === 'half-screen-caster' ||
+    template?.id === 'template-rpl-official';
 
-  const isRPLHalfScreen = !isStandardFullScreen;
+  const isStandardFullScreen = !isRPLHalfScreen;
+
+  // Standard 16:9 Full Screen Broadcast Layout Normalization
+  const activeHeroSlots =
+    isStandardFullScreen && (!config.heroSlots || config.heroSlots.length === 0 || config.heroSlots[0]?.y !== 190)
+      ? DEFAULT_TEMPLATES[1].config.heroSlots
+      : config.heroSlots;
 
   return (
     <div
@@ -138,26 +148,32 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
             <TeamPanel
               team={match.blue_team}
               side="blue"
-              headerPosition={config.blueTeamHeader}
-              scorePosition={config.blueScore}
+              headerPosition={isStandardFullScreen ? { x: 28, y: 40, width: 735, height: 95 } : config.blueTeamHeader}
+              scorePosition={isStandardFullScreen ? { x: 775, y: 40, width: 95, height: 95 } : config.blueScore}
               score={match.blue_score}
             />
             <TeamPanel
               team={match.red_team}
               side="red"
-              headerPosition={config.redTeamHeader}
-              scorePosition={config.redScore}
+              headerPosition={isStandardFullScreen ? { x: 1157, y: 40, width: 735, height: 95 } : config.redTeamHeader}
+              scorePosition={isStandardFullScreen ? { x: 1050, y: 40, width: 95, height: 95 } : config.redScore}
               score={match.red_score}
             />
 
-            {/* 4. Phase Indicator */}
-            <DraftPhase
-              position={config.phaseIndicator}
+            {/* 4. Center Broadcast Module (Waiting for Start / Live Timer & Turn) */}
+            <DraftTimer
+              position={isStandardFullScreen ? { x: 880, y: 40, width: 160, height: 95 } : (config.timer || config.phaseIndicator)}
+              seconds={match.timer_seconds ?? 30}
+              isRunning={match.timer_running ?? false}
+              currentTurn={match.current_turn || (phaseInfo.team as 'blue' | 'red') || 'blue'}
+              phaseType={phaseInfo.type}
+              phaseTitle={phaseInfo.title}
+              boFormat={match.bo_format || 'BO 3'}
               phase={match.current_phase}
             />
 
             {/* 5. Hero Slots (Picks & Bans) */}
-            {config.heroSlots.map((slotConfig) => {
+            {activeHeroSlots.map((slotConfig) => {
               const actionKey = `${slotConfig.team}_${slotConfig.type}_${slotConfig.slotIndex}`;
               const assignedHero = heroActionMap.get(actionKey);
 
@@ -191,11 +207,11 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
               );
             })}
 
-            {/* 6. Sponsor Banner (Auto-rotating carousel) */}
+            {/* 6. Full-Width Sponsor Dock (Auto-rotating carousel spanning 1920px edge-to-edge) */}
             <Sponsor
               sponsor={match.sponsor}
               sponsors={match.sponsors_list}
-              position={config.sponsors}
+              position={isStandardFullScreen ? { x: 0, y: 1000, width: 1920, height: 80 } : config.sponsors}
             />
           </>
         )}
