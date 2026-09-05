@@ -41,6 +41,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       template: template,
       theme: match.theme || theme,
       sponsor: match.sponsor || sponsor,
+      sponsors_list: match.sponsors_list,
       actions,
     },
   });

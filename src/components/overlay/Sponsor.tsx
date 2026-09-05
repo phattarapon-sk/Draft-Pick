@@ -11,15 +11,57 @@ interface SponsorProps {
 }
 
 export const Sponsor: React.FC<SponsorProps> = ({ sponsor, sponsors = [], position }) => {
-  const activeSponsors = sponsors.length > 0 ? sponsors : sponsor ? [sponsor] : [];
+  const [extraSponsors, setExtraSponsors] = useState<SponsorType[]>([]);
   const [sponsorTick, setSponsorTick] = useState(0);
 
+  // Load all registered sponsors from storage as background pool
+  useEffect(() => {
+    import('@/lib/supabase/mockStorage').then(({ getSponsors }) => {
+      getSponsors().then((list) => {
+        if (list && list.length > 0) {
+          setExtraSponsors(list);
+        }
+      });
+    });
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'rov_esports_sponsors' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setExtraSponsors(parsed);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Timer interval: advances sponsorTick every 3 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setSponsorTick((prev) => prev + 1);
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Determine the active sponsors pool:
+  // 1. If match explicitly provides a multi-sponsor list with > 1 sponsors, use it.
+  // 2. Otherwise, if extraSponsors has multiple sponsors from storage, use all of them!
+  // 3. Fallback to passed sponsors array or single sponsor.
+  const activeSponsors =
+    sponsors && sponsors.length > 1
+      ? sponsors
+      : extraSponsors.length > 1
+      ? extraSponsors
+      : sponsors.length > 0
+      ? sponsors
+      : sponsor
+      ? [sponsor]
+      : extraSponsors.length > 0
+      ? extraSponsors
+      : [];
 
   if (activeSponsors.length === 0) return null;
 
@@ -63,7 +105,7 @@ export const Sponsor: React.FC<SponsorProps> = ({ sponsor, sponsors = [], positi
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={`sponsor-fade-${activeCount > 1 ? currentSponsor.id || (sponsorTick % activeCount) : sponsorTick}`}
+            key={`sponsor-item-${sponsorTick}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}

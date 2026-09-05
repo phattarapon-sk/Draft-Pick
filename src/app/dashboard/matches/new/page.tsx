@@ -26,6 +26,7 @@ export default function CreateMatchPage() {
   const [bgUrl, setBgUrl] = useState('');
   const [gameLogoUrl, setGameLogoUrl] = useState('');
   const [sponsorId, setSponsorId] = useState('');
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
 
@@ -51,7 +52,11 @@ export default function CreateMatchPage() {
           setTemplateId(rplOfficial ? rplOfficial.id : tp[0].id);
         }
         if (th.length > 0) setThemeId(th[0].id);
-        if (sp.length > 0) setSponsorId(sp[0].id);
+        if (sp.length > 0) {
+          setSponsorId(sp[0].id);
+          // By default, select all registered sponsors so they automatically rotate on the overlay
+          setSelectedSponsorIds(sp.map((s) => s.id));
+        }
       }
     );
   }, []);
@@ -93,7 +98,8 @@ export default function CreateMatchPage() {
         background_type: bgType,
         background_url: bgUrl || undefined,
         game_logo_url: gameLogoUrl || undefined,
-        sponsor_id: sponsorId || undefined,
+        sponsor_id: selectedSponsorIds[0] || sponsorId || undefined,
+        sponsor_ids: selectedSponsorIds,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         actions: [],
@@ -237,52 +243,117 @@ export default function CreateMatchPage() {
           </div>
         </div>
 
-        {/* Background & Sponsor */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-          <div>
-            <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Background Mode
-            </label>
-            <select
-              value={bgType}
-              onChange={(e) => setBgType(e.target.value as BackgroundType)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-            >
-              <option value="transparent">Transparent (OBS Overlay - Transparent Background)</option>
-              <option value="green_screen">Green Screen (Chroma Key Background)</option>
-              <option value="gradient">Esports Dynamic Gradient</option>
-              <option value="image">Custom Image URL</option>
-              <option value="video">Custom Video Loop (MP4 / WebM)</option>
-            </select>
+        {/* Background Mode */}
+        <div className="pt-2">
+          <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
+            Background Mode
+          </label>
+          <select
+            value={bgType}
+            onChange={(e) => setBgType(e.target.value as BackgroundType)}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
+          >
+            <option value="transparent">Transparent (OBS Overlay - Transparent Background)</option>
+            <option value="green_screen">Green Screen (Chroma Key Background)</option>
+            <option value="gradient">Esports Dynamic Gradient</option>
+            <option value="image">Custom Image URL</option>
+            <option value="video">Custom Video Loop (MP4 / WebM)</option>
+          </select>
 
-            {(bgType === 'image' || bgType === 'video') && (
-              <ImageUploader
-                value={bgUrl}
-                onChange={setBgUrl}
-                onUploadingChange={handleUploadStateChange}
-                placeholder="https://... URL or upload background file"
-                bucket="backgrounds"
-                className="mt-2"
-              />
-            )}
+          {(bgType === 'image' || bgType === 'video') && (
+            <ImageUploader
+              value={bgUrl}
+              onChange={setBgUrl}
+              onUploadingChange={handleUploadStateChange}
+              placeholder="https://... URL or upload background file"
+              bucket="backgrounds"
+              className="mt-2"
+            />
+          )}
+        </div>
+
+        {/* Sponsor Showcase Multi-Select Carousel */}
+        <div className="pt-2 border-t border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+              <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                Sponsor Showcase (เลือกสปอนเซอร์หมุนเวียนบน Overlay)
+              </label>
+              <p className="text-[11px] text-slate-400">
+                เลือกสปอนเซอร์ที่ต้องการให้แสดงในห้องนี้ ระบบจะสลับแสดงทุก ๆ 3 วินาทีแบบวนซ้ำ (เลือกได้หลายแบรนด์)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedSponsorIds(sponsors.map((s) => s.id))}
+                className="px-2.5 py-1 text-xs rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900 transition-all font-mono font-bold"
+              >
+                เลือกทั้งหมด ({sponsors.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSponsorIds([])}
+                className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-all font-mono"
+              >
+                ไม่เลือกสปอนเซอร์
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Sponsor Showcase
-            </label>
-            <select
-              value={sponsorId}
-              onChange={(e) => setSponsorId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-            >
-              <option value="">No Sponsor</option>
-              {sponsors.map((sp) => (
-                <option key={sp.id} value={sp.id}>
-                  {sp.name}
-                </option>
-              ))}
-            </select>
+          {sponsors.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-slate-800 bg-slate-900/50 text-center text-xs text-slate-400">
+              ยังไม่มีข้อมูลสปอนเซอร์ในระบบ สามารถเพิ่มสปอนเซอร์ใหม่ได้ที่เมนู Sponsors ด้านซ้าย
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {sponsors.map((sp) => {
+                const isSelected = selectedSponsorIds.includes(sp.id);
+                return (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSponsorIds((prev) =>
+                        isSelected ? prev.filter((id) => id !== sp.id) : [...prev, sp.id]
+                      );
+                    }}
+                    className={`p-3 rounded-xl border-2 flex items-center gap-3 text-left transition-all ${
+                      isSelected
+                        ? 'bg-amber-950/40 border-amber-400/90 shadow-[0_0_15px_rgba(251,191,36,0.25)]'
+                        : 'bg-slate-900 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center border text-xs font-black ${
+                        isSelected
+                          ? 'bg-amber-400 border-amber-400 text-black'
+                          : 'border-slate-600 bg-slate-800 text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    {sp.logo_url && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={sp.logo_url}
+                        alt={sp.name}
+                        className="w-8 h-8 object-contain filter drop-shadow rounded bg-black/40 p-0.5"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-white truncate">{sp.name}</div>
+                      <div className="text-[10px] font-mono text-amber-400/80 truncate">
+                        {sp.text || 'OFFICIAL PARTNER'}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="text-[11px] text-cyan-400/90 font-mono mt-2">
+            * สปอนเซอร์ที่เลือกแสดง: <strong>{selectedSponsorIds.length}</strong> / {sponsors.length} แบรนด์
           </div>
         </div>
 

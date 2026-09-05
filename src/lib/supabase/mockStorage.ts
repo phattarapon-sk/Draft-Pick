@@ -645,9 +645,14 @@ export async function getMatchById(id: string): Promise<Match | null> {
   const template = defaultTpl || templates.find((t) => t.id === match?.template_id) || DEFAULT_TEMPLATES[0];
   const theme = themes.find((t) => t.id === match?.theme_id) || DEFAULT_THEMES[0];
   const sponsor = sponsors.find((s) => s.id === match?.sponsor_id);
-  const sponsors_list = match?.sponsor_ids && match.sponsor_ids.length > 0
-    ? sponsors.filter((s) => match?.sponsor_ids?.includes(s.id))
-    : sponsor ? [sponsor] : sponsors;
+  const sponsors_list =
+    match?.sponsor_ids && match.sponsor_ids.length > 0
+      ? sponsors.filter((s) => match.sponsor_ids?.includes(s.id))
+      : sponsors.length > 0
+      ? sponsors
+      : sponsor
+      ? [sponsor]
+      : [];
 
   // Hydrate actions with hero details
   const actions = (match.actions || []).map((action) => ({
