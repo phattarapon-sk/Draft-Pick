@@ -46,17 +46,18 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
   const boFormat = match.bo_format || 'BO 5';
 
   const allSponsors = match.sponsors_list?.length ? match.sponsors_list : match.sponsor ? [match.sponsor] : [];
+  const [sponsorTick, setSponsorTick] = React.useState(0);
 
-  // Build continuous marquee array (repeat to ensure seamless infinite loop)
-  const marqueeSponsors = React.useMemo(() => {
-    if (allSponsors.length === 0) return [];
-    const repeatCount = allSponsors.length === 1 ? 4 : allSponsors.length === 2 ? 3 : 2;
-    const base: typeof allSponsors = [];
-    for (let i = 0; i < repeatCount; i++) {
-      base.push(...allSponsors);
-    }
-    return [...base, ...base];
-  }, [allSponsors]);
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      setSponsorTick((prev) => prev + 1);
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
+
+  const activeCount = allSponsors.length;
+  const currentSponsor = activeCount > 0 ? allSponsors[sponsorTick % activeCount] : null;
+
 
 
   /* ===== BAN SLOT ===== */
@@ -271,34 +272,45 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
 
 
 
-            {/* Sponsor Continuous Marquee (Bottom) */}
-            <div className="w-full py-1 px-1.5 rounded-lg bg-white border border-slate-200 shadow-lg flex items-center overflow-hidden h-[40px] relative select-none">
-              {marqueeSponsors.length > 0 ? (
-                <div className="animate-marquee-dock flex items-center">
-                  {marqueeSponsors.map((sp, idx) => (
-                    <div key={`dock-sp-${idx}`} className="flex items-center gap-2 px-3 flex-shrink-0">
-                      {sp.logo_url && (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={sp.logo_url}
-                          alt={sp.name}
-                          className="h-5 max-w-[70px] object-contain filter drop-shadow-sm"
-                        />
-                      )}
-                      <span className="text-[10px] font-black text-slate-800 font-display tracking-wider uppercase whitespace-nowrap">
-                        {sp.name}
-                      </span>
-                      <span className="text-amber-500 font-black text-xs mx-1 select-none">✦</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center w-full">
-                  <span className="text-[10px] font-black text-slate-500 font-display tracking-wider uppercase">
-                    DRAFT PICK SYSTEM
-                  </span>
-                </div>
-              )}
+            {/* Sponsor Carousel Box (Bottom) - Fades continuously every 3 seconds */}
+            <div className="w-full py-1.5 px-3 rounded-lg bg-white border border-slate-200 shadow-lg flex items-center justify-center overflow-hidden h-[42px] relative select-none">
+              <AnimatePresence mode="wait">
+                {currentSponsor ? (
+                  <motion.div
+                    key={`rpl-sp-${activeCount > 1 ? currentSponsor.id || (sponsorTick % activeCount) : sponsorTick}`}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.35, ease: 'easeInOut' }}
+                    className="flex items-center justify-center gap-2.5 w-full"
+                  >
+                    {currentSponsor.logo_url && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={currentSponsor.logo_url}
+                        alt={currentSponsor.name}
+                        className="h-6 max-w-[85px] object-contain filter drop-shadow-sm"
+                      />
+                    )}
+                    <span className="text-[10px] font-black text-slate-800 font-display tracking-wider uppercase truncate max-w-[160px]">
+                      {currentSponsor.name}
+                    </span>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key={`rpl-def-${sponsorTick}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.35 }}
+                    className="flex items-center justify-center w-full"
+                  >
+                    <span className="text-[10px] font-black text-slate-500 font-display tracking-wider uppercase">
+                      DRAFT PICK SYSTEM
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
