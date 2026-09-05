@@ -45,16 +45,19 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
   const isBlueTurn = match.current_turn === 'blue';
   const boFormat = match.bo_format || 'BO 5';
 
-  const [sponsorIndex, setSponsorIndex] = React.useState(0);
   const allSponsors = match.sponsors_list?.length ? match.sponsors_list : match.sponsor ? [match.sponsor] : [];
 
-  React.useEffect(() => {
-    if (allSponsors.length <= 1) return;
-    const t = setInterval(() => setSponsorIndex((p) => (p + 1) % allSponsors.length), 5000);
-    return () => clearInterval(t);
-  }, [allSponsors.length]);
+  // Build continuous marquee array (repeat to ensure seamless infinite loop)
+  const marqueeSponsors = React.useMemo(() => {
+    if (allSponsors.length === 0) return [];
+    const repeatCount = allSponsors.length === 1 ? 4 : allSponsors.length === 2 ? 3 : 2;
+    const base: typeof allSponsors = [];
+    for (let i = 0; i < repeatCount; i++) {
+      base.push(...allSponsors);
+    }
+    return [...base, ...base];
+  }, [allSponsors]);
 
-  const currentSponsor = allSponsors[sponsorIndex] || allSponsors[0];
 
   /* ===== BAN SLOT ===== */
   const BanSlot = ({ team, idx }: { team: 'blue' | 'red'; idx: number }) => {
@@ -268,30 +271,34 @@ export const RPLBroadcastDock: React.FC<RPLBroadcastDockProps> = ({
 
 
 
-            {/* Sponsor Carousel (Bottom) */}
-            <div className="w-full py-2 px-3 rounded-lg bg-white border border-slate-200 shadow-lg flex items-center justify-center overflow-hidden min-h-[40px]">
-              <AnimatePresence mode="wait">
-                {currentSponsor ? (
-                  <motion.div
-                    key={currentSponsor.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.4 }}
-                    className="flex items-center justify-center gap-2 w-full"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={currentSponsor.logo_url} alt={currentSponsor.name} className="h-6 max-w-[80px] object-contain" />
-                    <span className="text-[10px] font-black text-slate-800 font-display tracking-wider uppercase truncate">
-                      {currentSponsor.name}
-                    </span>
-                  </motion.div>
-                ) : (
-                  <motion.span key="def" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] font-black text-slate-500 font-display tracking-wider uppercase">
+            {/* Sponsor Continuous Marquee (Bottom) */}
+            <div className="w-full py-1 px-1.5 rounded-lg bg-white border border-slate-200 shadow-lg flex items-center overflow-hidden h-[40px] relative select-none">
+              {marqueeSponsors.length > 0 ? (
+                <div className="animate-marquee-dock flex items-center">
+                  {marqueeSponsors.map((sp, idx) => (
+                    <div key={`dock-sp-${idx}`} className="flex items-center gap-2 px-3 flex-shrink-0">
+                      {sp.logo_url && (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={sp.logo_url}
+                          alt={sp.name}
+                          className="h-5 max-w-[70px] object-contain filter drop-shadow-sm"
+                        />
+                      )}
+                      <span className="text-[10px] font-black text-slate-800 font-display tracking-wider uppercase whitespace-nowrap">
+                        {sp.name}
+                      </span>
+                      <span className="text-amber-500 font-black text-xs mx-1 select-none">✦</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center w-full">
+                  <span className="text-[10px] font-black text-slate-500 font-display tracking-wider uppercase">
                     DRAFT PICK SYSTEM
-                  </motion.span>
-                )}
-              </AnimatePresence>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

@@ -7,6 +7,7 @@ import { Upload, Image as ImageIcon, Link as LinkIcon, Check, Loader2, X } from 
 interface ImageUploaderProps {
   value: string;
   onChange: (url: string) => void;
+  onUploadingChange?: (isUploading: boolean) => void;
   label?: string;
   placeholder?: string;
   bucket?: string;
@@ -16,12 +17,14 @@ interface ImageUploaderProps {
 export const ImageUploader: React.FC<ImageUploaderProps> = ({
   value,
   onChange,
+  onUploadingChange,
   label,
   placeholder = 'https://... or upload local file',
   bucket = 'assets',
   className = '',
 }) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [mode, setMode] = useState<'upload' | 'url'>('upload');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,7 +35,18 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     // Reset input value so re-uploading the same file works
     e.target.value = '';
 
+    // Immediate visual preview using local blob URL
+    let objectUrl = '';
+    try {
+      objectUrl = URL.createObjectURL(file);
+      setLocalPreview(objectUrl);
+    } catch {
+      // ignore
+    }
+
     setIsUploading(true);
+    onUploadingChange?.(true);
+
     try {
       const url = await uploadImageFile(file, bucket);
       onChange(url);
@@ -40,11 +54,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       console.error('File upload failed', err);
       alert(`อัปโหลดรูปภาพไม่สำเร็จ: ${err?.message || 'กรุณาลองใหม่อีกครั้ง'}`);
     } finally {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      setLocalPreview(null);
       setIsUploading(false);
+      onUploadingChange?.(false);
     }
   };
 
   const handleClear = () => {
+    setLocalPreview(null);
     onChange('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -105,18 +125,24 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           </button>
 
           {/* Thumbnail Preview */}
-          {value && (
-            <div className="relative w-10 h-10 rounded-xl bg-black border border-cyan-500/50 overflow-hidden flex-shrink-0 flex items-center justify-center group">
+          {(localPreview || value) && (
+            <div className="relative w-10 h-10 rounded-xl bg-black border border-cyan-500/50 overflow-hidden flex-shrink-0 flex items-center justify-center group shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={value} alt="Preview" className="w-full h-full object-contain" />
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute inset-0 bg-black/70 text-red-400 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                title="Remove image"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <img src={localPreview || value} alt="Preview" className="w-full h-full object-contain" />
+              {isUploading ? (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="absolute inset-0 bg-black/70 text-red-400 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                  title="Remove image"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
         </div>

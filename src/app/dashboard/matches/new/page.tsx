@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getTeams, getTemplates, getThemes, getSponsors, saveMatch } from '@/lib/supabase/mockStorage';
 import { Team, Template, Theme, Sponsor, Match, BackgroundType } from '@/types';
 import { ImageUploader } from '@/components/common/ImageUploader';
-import { Swords, ArrowLeft, Check, Sparkles } from 'lucide-react';
+import { Swords, ArrowLeft, Check, Sparkles, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CreateMatchPage() {
@@ -27,6 +27,11 @@ export default function CreateMatchPage() {
   const [gameLogoUrl, setGameLogoUrl] = useState('');
   const [sponsorId, setSponsorId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+
+  const handleUploadStateChange = (isUploading: boolean) => {
+    setUploadingCount((prev) => Math.max(0, prev + (isUploading ? 1 : -1)));
+  };
 
   useEffect(() => {
     Promise.all([getTeams(), getTemplates(), getThemes(), getSponsors()]).then(
@@ -55,6 +60,10 @@ export default function CreateMatchPage() {
     e.preventDefault();
     if (!name || !blueTeamId || !redTeamId || !templateId || !themeId) {
       alert('Please complete all required fields.');
+      return;
+    }
+    if (uploadingCount > 0) {
+      alert('กรุณารอรูปภาพอัปโหลดให้เสร็จสิ้นก่อนสร้างการแข่งขัน');
       return;
     }
 
@@ -250,6 +259,7 @@ export default function CreateMatchPage() {
               <ImageUploader
                 value={bgUrl}
                 onChange={setBgUrl}
+                onUploadingChange={handleUploadStateChange}
                 placeholder="https://... URL or upload background file"
                 bucket="backgrounds"
                 className="mt-2"
@@ -281,6 +291,7 @@ export default function CreateMatchPage() {
           label="Center Tournament / Game Logo (Optional)"
           value={gameLogoUrl}
           onChange={setGameLogoUrl}
+          onUploadingChange={handleUploadStateChange}
           placeholder="https://... (Leave empty for default RoV Official Logo)"
           bucket="logos"
         />
@@ -289,11 +300,25 @@ export default function CreateMatchPage() {
         <div className="pt-4 border-t border-slate-800 flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black text-sm uppercase shadow-[0_0_20px_rgba(0,217,255,0.4)] transition-all disabled:opacity-50"
+            disabled={isSubmitting || uploadingCount > 0}
+            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black text-sm uppercase shadow-[0_0_20px_rgba(0,217,255,0.4)] transition-all disabled:opacity-50 cursor-pointer"
           >
-            <Check className="w-4 h-4 stroke-[3]" />
-            <span>{isSubmitting ? 'Creating...' : 'Create & Launch Match'}</span>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-black" />
+                <span>Creating...</span>
+              </>
+            ) : uploadingCount > 0 ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-black" />
+                <span>กำลังอัปโหลดรูปภาพ ({uploadingCount} ไฟล์)...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Create & Launch Match</span>
+              </>
+            )}
           </button>
         </div>
       </form>

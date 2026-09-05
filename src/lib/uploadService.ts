@@ -105,10 +105,16 @@ export async function uploadImageFile(file: File, bucketOrFolder = 'assets'): Pr
     formData.append('folder', folder);
     formData.append('bucket', 'assets');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch('/api/upload', {
       method: 'POST',
       body: formData,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (response.ok) {
       const json = await response.json();
@@ -117,7 +123,7 @@ export async function uploadImageFile(file: File, bucketOrFolder = 'assets'): Pr
       }
     }
   } catch (apiErr) {
-    console.warn('API route /api/upload unavailable, trying direct Supabase client upload:', apiErr);
+    console.warn('API route /api/upload unavailable or timed out, falling back to alternative strategy:', apiErr);
   }
 
   // Strategy 2: Direct Client-Side Supabase Upload to 'assets' bucket

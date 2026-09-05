@@ -4,13 +4,19 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getLogos, saveLogo, deleteLogo } from '@/lib/supabase/mockStorage';
 import { GameLogo } from '@/types';
 import { ImageUploader } from '@/components/common/ImageUploader';
-import { Trophy, Plus, Edit2, Trash2, Check, X, Search } from 'lucide-react';
+import { Trophy, Plus, Edit2, Trash2, Check, X, Search, Loader2 } from 'lucide-react';
 
 export default function LogosPage() {
   const [logos, setLogos] = useState<GameLogo[]>([]);
   const [search, setSearch] = useState('');
   const [editingLogo, setEditingLogo] = useState<GameLogo | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+
+  const handleUploadStateChange = (isUploading: boolean) => {
+    setUploadingCount((prev) => Math.max(0, prev + (isUploading ? 1 : -1)));
+  };
 
   const fetchLogos = async () => {
     const list = await getLogos();
@@ -30,6 +36,7 @@ export default function LogosPage() {
   }, [logos, search]);
 
   const handleOpenNew = () => {
+    setUploadingCount(0);
     setEditingLogo({
       id: `logo-${Date.now()}`,
       name: '',
@@ -42,11 +49,24 @@ export default function LogosPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLogo || !editingLogo.name || !editingLogo.logo_url) return;
+    if (uploadingCount > 0) {
+      alert('กรุณารอรูปภาพอัปโหลดให้เสร็จสิ้นก่อนทำการบันทึก');
+      return;
+    }
 
-    await saveLogo(editingLogo);
-    await fetchLogos();
-    setEditingLogo(null);
-    setIsNew(false);
+    setIsSaving(true);
+    try {
+      await saveLogo(editingLogo);
+      await fetchLogos();
+      setEditingLogo(null);
+      setUploadingCount(0);
+      setIsNew(false);
+    } catch (err) {
+      console.error('Save logo failed', err);
+      alert('บันทึกโลโก้ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -221,7 +241,7 @@ export default function LogosPage() {
                   type="text"
                   required
                   value={editingLogo.name}
-                  onChange={(e) => setEditingLogo({ ...editingLogo, name: e.target.value })}
+                  onChange={(e) => setEditingLogo((prev) => (prev ? { ...prev, name: e.target.value } : null))}
                   className="w-full bg-[#1e293b] border border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400 font-semibold"
                   placeholder="เช่น RoV Pro League 2026, Arena of Valor..."
                 />
@@ -230,7 +250,8 @@ export default function LogosPage() {
               <ImageUploader
                 label="รูปภาพโลโก้ (PNG โปร่งใส / SVG / GIF) *"
                 value={editingLogo.logo_url}
-                onChange={(url) => setEditingLogo({ ...editingLogo, logo_url: url })}
+                onChange={(url) => setEditingLogo((prev) => (prev ? { ...prev, logo_url: url } : null))}
+                onUploadingChange={handleUploadStateChange}
                 bucket="logos"
               />
 
@@ -239,7 +260,7 @@ export default function LogosPage() {
                   type="checkbox"
                   id="logo-default"
                   checked={editingLogo.is_default || false}
-                  onChange={(e) => setEditingLogo({ ...editingLogo, is_default: e.target.checked })}
+                  onChange={(e) => setEditingLogo((prev) => (prev ? { ...prev, is_default: e.target.checked } : null))}
                   className="w-4 h-4 rounded bg-[#1e293b] border-slate-600 text-amber-400 cursor-pointer"
                 />
                 <label htmlFor="logo-default" className="text-xs font-medium text-slate-200 cursor-pointer">
@@ -250,17 +271,35 @@ export default function LogosPage() {
               <div className="pt-3 border-t border-slate-700 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingLogo(null)}
+                  onClick={() => {
+                    setEditingLogo(null);
+                    setUploadingCount(0);
+                  }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs uppercase shadow-md cursor-pointer"
+                  disabled={isSaving || uploadingCount > 0}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs uppercase shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>บันทึกโลโก้</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>กำลังบันทึก...</span>
+                    </>
+                  ) : uploadingCount > 0 ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>กำลังอัปโหลดรูปภาพ ({uploadingCount} ไฟล์)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>บันทึกโลโก้</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

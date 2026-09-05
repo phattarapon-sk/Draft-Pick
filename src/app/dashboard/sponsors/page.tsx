@@ -4,13 +4,19 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getSponsors, saveSponsor } from '@/lib/supabase/mockStorage';
 import { Sponsor } from '@/types';
 import { ImageUploader } from '@/components/common/ImageUploader';
-import { DollarSign, Plus, Edit2, Trash2, Check, X, Search, Globe } from 'lucide-react';
+import { DollarSign, Plus, Edit2, Trash2, Check, X, Search, Globe, Loader2 } from 'lucide-react';
 
 export default function SponsorsPage() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [search, setSearch] = useState('');
   const [editingSponsor, setEditingSponsor] = useState<Sponsor | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+
+  const handleUploadStateChange = (isUploading: boolean) => {
+    setUploadingCount((prev) => Math.max(0, prev + (isUploading ? 1 : -1)));
+  };
 
   const fetchSponsors = async () => {
     const list = await getSponsors();
@@ -30,6 +36,7 @@ export default function SponsorsPage() {
   }, [sponsors, search]);
 
   const handleOpenNew = () => {
+    setUploadingCount(0);
     setEditingSponsor({
       id: `sponsor-${Date.now()}`,
       name: '',
@@ -44,11 +51,24 @@ export default function SponsorsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSponsor || !editingSponsor.name) return;
+    if (uploadingCount > 0) {
+      alert('กรุณารอรูปภาพอัปโหลดให้เสร็จสิ้นก่อนทำการบันทึก');
+      return;
+    }
 
-    await saveSponsor(editingSponsor);
-    await fetchSponsors();
-    setEditingSponsor(null);
-    setIsNew(false);
+    setIsSaving(true);
+    try {
+      await saveSponsor(editingSponsor);
+      await fetchSponsors();
+      setEditingSponsor(null);
+      setUploadingCount(0);
+      setIsNew(false);
+    } catch (err) {
+      console.error('Save sponsor error', err);
+      alert('บันทึกสปอนเซอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -284,7 +304,8 @@ export default function SponsorsPage() {
               <ImageUploader
                 label="โลโก้สปอนเซอร์ (PNG โปร่งใส / SVG / GIF) *"
                 value={editingSponsor.logo_url}
-                onChange={(url) => setEditingSponsor({ ...editingSponsor, logo_url: url })}
+                onChange={(url) => setEditingSponsor((prev) => (prev ? { ...prev, logo_url: url } : null))}
+                onUploadingChange={handleUploadStateChange}
                 bucket="sponsors"
               />
 
@@ -293,7 +314,7 @@ export default function SponsorsPage() {
                   type="checkbox"
                   id="sponsor-active"
                   checked={editingSponsor.is_active}
-                  onChange={(e) => setEditingSponsor({ ...editingSponsor, is_active: e.target.checked })}
+                  onChange={(e) => setEditingSponsor((prev) => (prev ? { ...prev, is_active: e.target.checked } : null))}
                   className="w-4 h-4 rounded bg-[#1e293b] border-slate-600 text-cyan-400 cursor-pointer"
                 />
                 <label htmlFor="sponsor-active" className="text-xs font-medium text-slate-200 cursor-pointer">
@@ -304,17 +325,35 @@ export default function SponsorsPage() {
               <div className="pt-3 border-t border-slate-700 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingSponsor(null)}
+                  onClick={() => {
+                    setEditingSponsor(null);
+                    setUploadingCount(0);
+                  }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs uppercase shadow-md cursor-pointer"
+                  disabled={isSaving || uploadingCount > 0}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs uppercase shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>บันทึกสปอนเซอร์</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>กำลังบันทึก...</span>
+                    </>
+                  ) : uploadingCount > 0 ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>กำลังอัปโหลดรูปภาพ ({uploadingCount} ไฟล์)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>บันทึกสปอนเซอร์</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

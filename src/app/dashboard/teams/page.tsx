@@ -11,6 +11,11 @@ export default function TeamsPage() {
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+
+  const handleUploadStateChange = (isUploading: boolean) => {
+    setUploadingCount((prev) => Math.max(0, prev + (isUploading ? 1 : -1)));
+  };
 
   const fetchTeams = async () => {
     const list = await getTeams();
@@ -22,6 +27,7 @@ export default function TeamsPage() {
   }, []);
 
   const handleOpenNew = () => {
+    setUploadingCount(0);
     setEditingTeam({
       id: `team-${Date.now()}`,
       name: '',
@@ -36,12 +42,17 @@ export default function TeamsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTeam || !editingTeam.name || !editingTeam.short_name) return;
+    if (uploadingCount > 0) {
+      alert('กรุณารอรูปภาพอัปโหลดให้เสร็จสิ้นก่อนทำการบันทึก');
+      return;
+    }
 
     setIsSaving(true);
     try {
       await saveTeam(editingTeam);
       await fetchTeams();
       setEditingTeam(null);
+      setUploadingCount(0);
       setIsNew(false);
     } catch (err) {
       console.error('Save team error', err);
@@ -219,7 +230,8 @@ export default function TeamsPage() {
                 <ImageUploader
                   label="Team Logo Artwork *"
                   value={editingTeam.logo_url}
-                  onChange={(url) => setEditingTeam({ ...editingTeam, logo_url: url })}
+                  onChange={(url) => setEditingTeam((prev) => (prev ? { ...prev, logo_url: url } : null))}
+                  onUploadingChange={handleUploadStateChange}
                   bucket="teams"
                 />
 
@@ -230,7 +242,7 @@ export default function TeamsPage() {
                       <input
                         type="color"
                         value={editingTeam.primary_color}
-                        onChange={(e) => setEditingTeam({ ...editingTeam, primary_color: e.target.value })}
+                        onChange={(e) => setEditingTeam((prev) => (prev ? { ...prev, primary_color: e.target.value } : null))}
                         className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
                       />
                       <span className="text-xs font-mono text-slate-300">{editingTeam.primary_color}</span>
@@ -243,7 +255,7 @@ export default function TeamsPage() {
                       <input
                         type="color"
                         value={editingTeam.secondary_color}
-                        onChange={(e) => setEditingTeam({ ...editingTeam, secondary_color: e.target.value })}
+                        onChange={(e) => setEditingTeam((prev) => (prev ? { ...prev, secondary_color: e.target.value } : null))}
                         className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
                       />
                       <span className="text-xs font-mono text-slate-300">{editingTeam.secondary_color}</span>
@@ -273,7 +285,7 @@ export default function TeamsPage() {
                       max="100"
                       step="5"
                       value={editingTeam.bg_opacity ?? 75}
-                      onChange={(e) => setEditingTeam({ ...editingTeam, bg_opacity: Number(e.target.value) })}
+                      onChange={(e) => setEditingTeam((prev) => (prev ? { ...prev, bg_opacity: Number(e.target.value) } : null))}
                       className="w-20 accent-cyan-400 cursor-pointer"
                     />
                     <span className="text-xs font-mono font-black text-white w-8 text-right">
@@ -307,13 +319,23 @@ export default function TeamsPage() {
                               type="text"
                               value={player.name || ''}
                               onChange={(e) => {
-                                const newRoster = [...roster];
-                                newRoster[i] = { ...newRoster[i], name: e.target.value };
-                                const newPlayers = newRoster.map((p) => p.name);
-                                setEditingTeam({
-                                  ...editingTeam,
-                                  players: newPlayers,
-                                  player_roster: newRoster,
+                                const val = e.target.value;
+                                setEditingTeam((prev) => {
+                                  if (!prev) return null;
+                                  const currentRoster = prev.player_roster || [
+                                    { name: prev.players?.[0] || 'Player 1' },
+                                    { name: prev.players?.[1] || 'Player 2' },
+                                    { name: prev.players?.[2] || 'Player 3' },
+                                    { name: prev.players?.[3] || 'Player 4' },
+                                    { name: prev.players?.[4] || 'Player 5' },
+                                  ];
+                                  const newRoster = [...currentRoster];
+                                  newRoster[i] = { ...newRoster[i], name: val };
+                                  return {
+                                    ...prev,
+                                    players: newRoster.map((p) => p.name),
+                                    player_roster: newRoster,
+                                  };
                                 });
                               }}
                               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
@@ -326,13 +348,24 @@ export default function TeamsPage() {
                           label={`P${i + 1} Player Card Background Photo`}
                           value={player.photo_url || ''}
                           onChange={(url) => {
-                            const newRoster = [...roster];
-                            newRoster[i] = { ...newRoster[i], photo_url: url };
-                            setEditingTeam({
-                              ...editingTeam,
-                              player_roster: newRoster,
+                            setEditingTeam((prev) => {
+                              if (!prev) return null;
+                              const currentRoster = prev.player_roster || [
+                                { name: prev.players?.[0] || 'Player 1' },
+                                { name: prev.players?.[1] || 'Player 2' },
+                                { name: prev.players?.[2] || 'Player 3' },
+                                { name: prev.players?.[3] || 'Player 4' },
+                                { name: prev.players?.[4] || 'Player 5' },
+                              ];
+                              const newRoster = [...currentRoster];
+                              newRoster[i] = { ...newRoster[i], photo_url: url };
+                              return {
+                                ...prev,
+                                player_roster: newRoster,
+                              };
                             });
                           }}
+                          onUploadingChange={handleUploadStateChange}
                           placeholder="https://... or upload custom player background image"
                           bucket="teams"
                         />
@@ -346,20 +379,28 @@ export default function TeamsPage() {
                   <button
                     type="button"
                     disabled={isSaving}
-                    onClick={() => setEditingTeam(null)}
+                    onClick={() => {
+                      setEditingTeam(null);
+                      setUploadingCount(0);
+                    }}
                     className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={isSaving}
+                    disabled={isSaving || uploadingCount > 0}
                     className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase flex items-center gap-2 shadow-[0_0_15px_rgba(0,217,255,0.4)] transition-all cursor-pointer disabled:opacity-60"
                   >
                     {isSaving ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
                         <span>Saving...</span>
+                      </>
+                    ) : uploadingCount > 0 ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                        <span>กำลังอัปโหลดรูปภาพ ({uploadingCount} ไฟล์)...</span>
                       </>
                     ) : (
                       <>

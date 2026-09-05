@@ -83,6 +83,11 @@ export default function HeroesPage() {
   const [editingHero, setEditingHero] = useState<Hero | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+
+  const handleUploadStateChange = (isUploading: boolean) => {
+    setUploadingCount((prev) => Math.max(0, prev + (isUploading ? 1 : -1)));
+  };
 
   // Category Manager Modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -175,6 +180,7 @@ export default function HeroesPage() {
   }, [filteredHeroes, currentPage]);
 
   const handleOpenNew = () => {
+    setUploadingCount(0);
     setEditingHero({
       id: `hero-${Date.now()}`,
       name: '',
@@ -194,6 +200,10 @@ export default function HeroesPage() {
       alert('กรุณากรอกชื่อฮีโร่');
       return;
     }
+    if (uploadingCount > 0) {
+      alert('กรุณารอรูปภาพอัปโหลดให้เสร็จสิ้นก่อนทำการบันทึก');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -203,15 +213,16 @@ export default function HeroesPage() {
         slug: editingHero.slug || editingHero.name.trim().toLowerCase().replace(/\s+/g, '-'),
       };
 
-      const savedHero = await saveHero(heroToSave);
+      await saveHero(heroToSave);
       await fetchHeroes();
 
-      // Show the newly saved hero right away
-      setSearch(savedHero.name);
+      // Show all heroes after save (do not filter down to the newly added hero)
+      setSearch('');
       setSelectedRole('ALL');
       setCurrentPage(1);
 
       setEditingHero(null);
+      setUploadingCount(0);
       setIsNew(false);
     } catch (err: any) {
       console.error('Save hero failed:', err);
@@ -664,12 +675,17 @@ export default function HeroesPage() {
                   label="ภาพการ์ดฮีโร่ (Portrait) *"
                   value={editingHero.portrait_url}
                   onChange={(url) =>
-                    setEditingHero({
-                      ...editingHero,
-                      portrait_url: url,
-                      image_url: url,
-                    })
+                    setEditingHero((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            portrait_url: url,
+                            image_url: url,
+                          }
+                        : null
+                    )
                   }
+                  onUploadingChange={handleUploadStateChange}
                   bucket="heroes"
                 />
               </div>
@@ -679,7 +695,8 @@ export default function HeroesPage() {
                 <ImageUploader
                   label="ภาพ Splash Art เต็มตัว"
                   value={editingHero.splash_url || ''}
-                  onChange={(url) => setEditingHero({ ...editingHero, splash_url: url })}
+                  onChange={(url) => setEditingHero((prev) => (prev ? { ...prev, splash_url: url } : null))}
+                  onUploadingChange={handleUploadStateChange}
                   bucket="heroes"
                 />
               </div>
@@ -690,7 +707,7 @@ export default function HeroesPage() {
                   type="checkbox"
                   id="hero-active"
                   checked={editingHero.is_active}
-                  onChange={(e) => setEditingHero({ ...editingHero, is_active: e.target.checked })}
+                  onChange={(e) => setEditingHero((prev) => (prev ? { ...prev, is_active: e.target.checked } : null))}
                   className="w-4 h-4 rounded bg-[#1e293b] border-slate-700 text-cyan-500 cursor-pointer"
                 />
                 <label htmlFor="hero-active" className="text-xs font-semibold text-slate-300 cursor-pointer">
@@ -702,20 +719,28 @@ export default function HeroesPage() {
               <div className="pt-3 border-t border-slate-700 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingHero(null)}
+                  onClick={() => {
+                    setEditingHero(null);
+                    setUploadingCount(0);
+                  }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || uploadingCount > 0}
                   className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs uppercase shadow-md cursor-pointer disabled:opacity-50"
                 >
                   {isSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>กำลังบันทึก...</span>
+                    </>
+                  ) : uploadingCount > 0 ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังอัปโหลดรูปภาพ ({uploadingCount} ไฟล์)...</span>
                     </>
                   ) : (
                     <>

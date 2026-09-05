@@ -114,3 +114,28 @@ html, body {
 .text-glow-gold {
   text-shadow: 0 0 12px rgba(255, 209, 102, 0.7), 0 0 24px rgba(255, 209, 102, 0.4);
 }
+
+/* Continuous Marquee Ticker (GPU-accelerated 60fps) */
+@keyframes marquee-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee-dock {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marquee-scroll 18s linear infinite;
+}
+
+.animate-marquee-continuous {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marquee-scroll 24s linear infinite;
+}
+

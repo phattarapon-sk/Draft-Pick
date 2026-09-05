@@ -922,8 +922,12 @@ export async function swapTeamSides(
     updatedPhase = 'WAITING';
     updatedTurn = 'blue';
   } else {
-    // When swapping teams without resetting, user wants the hero positions to STAY in their original slots on the screen!
-    // So updatedActions does NOT swap teams. Only the team names, logos, scores, and rosters swap sides.
+    // When swapping teams without resetting, hero picks and bans swap sides together with their respective teams!
+    updatedActions = (match.actions || []).map((action) => ({
+      ...action,
+      team: action.team === 'blue' ? 'red' : 'blue',
+    }));
+
     if (updatedPhase.startsWith('BLUE_')) {
       updatedPhase = updatedPhase.replace('BLUE_', 'RED_') as MatchPhase;
     } else if (updatedPhase.startsWith('RED_')) {
