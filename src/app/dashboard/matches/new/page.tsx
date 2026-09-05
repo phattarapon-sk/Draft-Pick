@@ -63,7 +63,7 @@ export default function CreateMatchPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !blueTeamId || !redTeamId || !templateId || !themeId) {
+    if (!name || !blueTeamId || !redTeamId || !templateId) {
       alert('Please complete all required fields.');
       return;
     }
@@ -94,7 +94,7 @@ export default function CreateMatchPage() {
         timer_running: false,
         bo_format: boFormat,
         template_id: templateId,
-        theme_id: themeId,
+        theme_id: themeId || '72222222-2222-2222-2222-222222222222',
         background_type: bgType,
         background_url: bgUrl || undefined,
         game_logo_url: gameLogoUrl || undefined,
@@ -189,8 +189,8 @@ export default function CreateMatchPage() {
           </div>
         </div>
 
-        {/* Template, Theme & Match Format */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+        {/* Template & Match Format */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           <div>
             <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
               Broadcast Layout Template *
@@ -222,23 +222,6 @@ export default function CreateMatchPage() {
               <option value="BO 3">Best of 3 (BO 3)</option>
               <option value="BO 5">Best of 5 (BO 5)</option>
               <option value="BO 7">Best of 7 (BO 7)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Visual Theme *
-            </label>
-            <select
-              value={themeId}
-              onChange={(e) => setThemeId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-            >
-              {themes.map((th) => (
-                <option key={th.id} value={th.id}>
-                  {th.name}
-                </option>
-              ))}
             </select>
           </div>
         </div>
