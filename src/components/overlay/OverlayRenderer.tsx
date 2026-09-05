@@ -121,14 +121,14 @@ export const OverlayRenderer: React.FC<OverlayRendererProps> = ({
           />
         ) : (
           <>
-            {/* 2. Center VS Decoration (High Contrast Prominent Emblem) */}
+            {/* 2. Center VS Decoration (Compact Refined Emblem) */}
             {config.decorations?.centerVsText && (
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none flex flex-col items-center select-none scale-110">
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none flex flex-col items-center select-none">
                 {/* Ambient Radial Aura Glow */}
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 via-amber-400/30 to-rose-500/20 blur-3xl rounded-full animate-pulse" />
+                <div className="absolute inset-0 -m-3 bg-gradient-to-r from-cyan-500/15 via-amber-400/20 to-rose-500/15 blur-lg rounded-full animate-pulse" />
 
-                <Swords className="w-52 h-52 text-amber-400/90 stroke-[1.5] filter drop-shadow-[0_0_35px_rgba(251,191,36,0.8)] animate-pulse" />
-                <span className="text-9xl font-display font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 via-amber-300 to-rose-400 -mt-10 filter drop-shadow-[0_0_45px_rgba(255,215,0,0.9)]">
+                <Swords className="w-14 h-14 text-amber-400/90 stroke-[1.75] filter drop-shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse" />
+                <span className="text-3xl font-display font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 via-amber-300 to-rose-400 -mt-1 filter drop-shadow-[0_0_15px_rgba(255,215,0,0.7)]">
                   VS
                 </span>
               </div>
