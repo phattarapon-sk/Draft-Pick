@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { getSponsors, saveSponsor } from '@/lib/supabase/mockStorage';
+import { getSponsors, saveSponsor, deleteSponsor } from '@/lib/supabase/mockStorage';
 import { Sponsor } from '@/types';
 import { ImageUploader } from '@/components/common/ImageUploader';
 import { DollarSign, Plus, Edit2, Trash2, Check, X, Search, Globe, Loader2 } from 'lucide-react';
@@ -73,8 +73,7 @@ export default function SponsorsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการลบสปอนเซอร์นี้?')) return;
-    const remaining = sponsors.filter((s) => s.id !== id);
-    localStorage.setItem('rov_esports_sponsors', JSON.stringify(remaining));
+    await deleteSponsor(id);
     await fetchSponsors();
   };
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DEFAULT_HEROES, DEFAULT_TEAMS, DEFAULT_THEMES, DEFAULT_TEMPLATES, DEFAULT_SPONSORS } from '@/config/defaultData';
 import { Match } from '@/types';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -14,7 +15,20 @@ if (!globalThis.__SERVER_MATCHES__) {
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const matchId = params.id;
   const store = globalThis.__SERVER_MATCHES__!;
-  const match = store.get(matchId) || null;
+  let match = store.get(matchId) || null;
+
+  // If not cached in server memory, fetch from Supabase once and cache it
+  if (!match && isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).maybeSingle();
+      if (!error && data) {
+        match = data as Match;
+        store.set(matchId, match);
+      }
+    } catch (e) {
+      console.warn('API route Supabase fetch match error:', e);
+    }
+  }
 
   if (!match) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });

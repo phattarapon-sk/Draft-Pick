@@ -36,11 +36,21 @@ export function useMatchSync(matchId: string, initialMatch?: Match | null) {
     return true;
   };
 
-  const fetchLatest = useCallback(async () => {
+  const lastSupabaseFetchRef = useRef<number>(0);
+
+  const fetchLatest = useCallback(async (forceSupabase = false) => {
     if (!matchId) return;
     const fetchId = ++fetchIdRef.current;
     try {
-      const data = await getMatchById(matchId);
+      const now = Date.now();
+      // Allow direct Supabase queries ONLY if forced (initial load or Realtime event),
+      // or if at least 30 seconds have elapsed since last Supabase query (rate-limiting safety fallback)
+      const canQuerySupabase = forceSupabase || (now - lastSupabaseFetchRef.current > 30000);
+
+      const data = await getMatchById(matchId, { allowSupabase: canQuerySupabase });
+      if (canQuerySupabase) {
+        lastSupabaseFetchRef.current = now;
+      }
       if (fetchId !== fetchIdRef.current) {
         // Discard result if a newer fetch was initiated
         return;
@@ -59,7 +69,7 @@ export function useMatchSync(matchId: string, initialMatch?: Match | null) {
 
   // Initial load
   useEffect(() => {
-    fetchLatest();
+    fetchLatest(true);
   }, [fetchLatest]);
 
   // Real-time synchronization
@@ -102,19 +112,21 @@ export function useMatchSync(matchId: string, initialMatch?: Match | null) {
         e.key === 'rov_esports_themes' ||
         e.key === 'rov_esports_templates'
       ) {
-        fetchLatest();
+        fetchLatest(false);
       }
     };
 
     window.addEventListener('match_updated', handleCustomEvent);
     window.addEventListener('storage', handleStorageEvent);
 
-    // Periodic poll for external clients like OBS Browser Source (every 1.5s)
+    // Periodic poll for external clients like OBS Browser Source (every 2s).
+    // Note: forceSupabase is false here so it ONLY polls local server API / localStorage.
+    // This guarantees ZERO Supabase PostgREST egress even if OBS is left open 24/7!
     const pollInterval = setInterval(() => {
-      fetchLatest();
-    }, 1500);
+      fetchLatest(false);
+    }, 2000);
 
-    // Supabase Realtime Channel
+    // Supabase Realtime Channel (WebSocket push - consumes virtually 0 egress)
     let channel: any = null;
     if (isSupabaseConfigured && supabase) {
       setStatus('reconnecting');
@@ -124,14 +136,15 @@ export function useMatchSync(matchId: string, initialMatch?: Match | null) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
           () => {
-            fetchLatest();
+            // Realtime push when database row updates
+            fetchLatest(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'match_actions', filter: `match_id=eq.${matchId}` },
           () => {
-            fetchLatest();
+            fetchLatest(true);
           }
         )
         .subscribe((subStatus) => {
@@ -187,5 +200,5 @@ export function useMatchSync(matchId: string, initialMatch?: Match | null) {
     };
   }, [match?.timer_running, match?.timer_ends_at]);
 
-  return { match, setMatch, status, refresh: fetchLatest, lastUpdated };
+  return { match, setMatch, status, refresh: () => fetchLatest(true), lastUpdated };
 }

@@ -129,22 +129,56 @@ function setStored<T>(key: string, value: T): void {
 }
 
 // -------------------------------------------------------------
+// IN-MEMORY TTL CACHE (Zero-Quota / Safe for 24/7 OBS Sources)
+// -------------------------------------------------------------
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const STATIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache for static assets (heroes, teams, themes, templates, sponsors, logos)
+const MATCHES_CACHE_TTL_MS = 10 * 1000;    // 10 seconds cache for match list
+
+let heroesCache: CacheEntry<Hero[]> | null = null;
+let teamsCache: CacheEntry<Team[]> | null = null;
+let themesCache: CacheEntry<Theme[]> | null = null;
+let templatesCache: CacheEntry<Template[]> | null = null;
+let sponsorsCache: CacheEntry<Sponsor[]> | null = null;
+let logosCache: CacheEntry<GameLogo[]> | null = null;
+let matchesCache: CacheEntry<Match[]> | null = null;
+
+// -------------------------------------------------------------
 // HEROES REPOSITORY
 // -------------------------------------------------------------
-export async function getHeroes(): Promise<Hero[]> {
+export async function getHeroes(forceRefresh = false): Promise<Hero[]> {
+  const now = Date.now();
+  if (!forceRefresh && heroesCache && now - heroesCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return heroesCache.data;
+  }
+
+  let result: Hero[] = [];
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('heroes').select('*').order('name');
-      if (!error && data) return data;
+      if (!error && data && data.length > 0) {
+        result = data;
+      }
     } catch (e) {
       console.warn('Supabase getHeroes error, falling back to local', e);
     }
   }
-  return getStored<Hero[]>(STORAGE_KEYS.HEROES, []);
+
+  if (result.length === 0) {
+    result = getStored<Hero[]>(STORAGE_KEYS.HEROES, []);
+  }
+
+  heroesCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveHero(hero: Hero): Promise<Hero> {
-  const heroes = await getHeroes();
+  heroesCache = null; // Invalidate cache immediately
+  const heroes = await getHeroes(true);
   const index = heroes.findIndex((h) => h.id === hero.id);
 
   // Generate safe unique slug
@@ -201,7 +235,8 @@ export async function saveHero(hero: Hero): Promise<Hero> {
 }
 
 export async function deleteHero(id: string): Promise<void> {
-  const heroes = await getHeroes();
+  heroesCache = null; // Invalidate cache immediately
+  const heroes = await getHeroes(true);
   const filtered = heroes.filter((h) => h.id !== id);
   setStored(STORAGE_KEYS.HEROES, filtered);
 
@@ -217,8 +252,14 @@ export async function deleteHero(id: string): Promise<void> {
 // -------------------------------------------------------------
 // TEAMS REPOSITORY
 // -------------------------------------------------------------
-export async function getTeams(): Promise<Team[]> {
+export async function getTeams(forceRefresh = false): Promise<Team[]> {
+  const now = Date.now();
+  if (!forceRefresh && teamsCache && now - teamsCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return teamsCache.data;
+  }
+
   const localTeams = getStored<Team[]>(STORAGE_KEYS.TEAMS, []);
+  let result: Team[] = localTeams;
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -226,7 +267,7 @@ export async function getTeams(): Promise<Team[]> {
       if (!error && data) {
         if (data.length > 0) {
           // Merge Supabase teams with localTeams so rosters, photos, and local custom teams are never lost
-          const merged: Team[] = data.map((sbTeam) => {
+          result = data.map((sbTeam) => {
             const local = localTeams.find(
               (lt) =>
                 lt.id === sbTeam.id ||
@@ -256,26 +297,26 @@ export async function getTeams(): Promise<Team[]> {
 
           // Add any local teams not present in Supabase
           for (const lt of localTeams) {
-            if (!merged.some((m) => m.id === lt.id || m.short_name?.toUpperCase() === lt.short_name?.toUpperCase())) {
-              merged.push(lt);
+            if (!result.some((m) => m.id === lt.id || m.short_name?.toUpperCase() === lt.short_name?.toUpperCase())) {
+              result.push(lt);
             }
           }
 
-          setStored(STORAGE_KEYS.TEAMS, merged);
-          return merged;
-        } else {
-          return localTeams;
+          setStored(STORAGE_KEYS.TEAMS, result);
         }
       }
     } catch (e) {
       console.warn('Supabase getTeams error, falling back to local', e);
     }
   }
-  return localTeams;
+
+  teamsCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveTeam(team: Team): Promise<Team> {
-  const teams = await getTeams();
+  teamsCache = null; // Invalidate cache immediately
+  const teams = await getTeams(true);
   const index = teams.findIndex(
     (t) =>
       t.id === team.id ||
@@ -355,7 +396,8 @@ export async function saveTeam(team: Team): Promise<Team> {
 }
 
 export async function deleteTeam(id: string): Promise<void> {
-  const teams = await getTeams();
+  teamsCache = null; // Invalidate cache immediately
+  const teams = await getTeams(true);
   setStored(STORAGE_KEYS.TEAMS, teams.filter((t) => t.id !== id));
 
   if (isSupabaseConfigured && supabase) {
@@ -370,20 +412,28 @@ export async function deleteTeam(id: string): Promise<void> {
 // -------------------------------------------------------------
 // THEMES & TEMPLATES REPOSITORY
 // -------------------------------------------------------------
-export async function getThemes(): Promise<Theme[]> {
+export async function getThemes(forceRefresh = false): Promise<Theme[]> {
+  const now = Date.now();
+  if (!forceRefresh && themesCache && now - themesCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return themesCache.data;
+  }
+
+  let result: Theme[] = getStored<Theme[]>(STORAGE_KEYS.THEMES, DEFAULT_THEMES);
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('themes').select('*');
-      if (!error && data && data.length > 0) return data;
+      if (!error && data && data.length > 0) result = data;
     } catch (e) {
       console.warn('Supabase getThemes error', e);
     }
   }
-  return getStored<Theme[]>(STORAGE_KEYS.THEMES, DEFAULT_THEMES);
+  themesCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveTheme(theme: Theme): Promise<Theme> {
-  const themes = await getThemes();
+  themesCache = null; // Invalidate cache immediately
+  const themes = await getThemes(true);
   const index = themes.findIndex((t) => t.id === theme.id);
   let updated: Theme[];
   if (index >= 0) {
@@ -396,12 +446,18 @@ export async function saveTheme(theme: Theme): Promise<Theme> {
   return theme;
 }
 
-export async function getTemplates(): Promise<Template[]> {
+export async function getTemplates(forceRefresh = false): Promise<Template[]> {
+  const now = Date.now();
+  if (!forceRefresh && templatesCache && now - templatesCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return templatesCache.data;
+  }
+
+  let result: Template[] = DEFAULT_TEMPLATES;
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('templates').select('*');
       if (!error && data && data.length > 0) {
-        return data.map((t) => {
+        result = data.map((t) => {
           const defaultT = DEFAULT_TEMPLATES.find((dt) => dt.id === t.id || dt.slug === t.slug);
           if (defaultT) {
             return {
@@ -419,11 +475,13 @@ export async function getTemplates(): Promise<Template[]> {
       console.warn('Supabase getTemplates error', e);
     }
   }
-  return DEFAULT_TEMPLATES;
+  templatesCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveTemplate(template: Template): Promise<Template> {
-  const templates = await getTemplates();
+  templatesCache = null; // Invalidate cache immediately
+  const templates = await getTemplates(true);
   const index = templates.findIndex((t) => t.id === template.id);
   let updated: Template[];
   if (index >= 0) {
@@ -439,20 +497,28 @@ export async function saveTemplate(template: Template): Promise<Template> {
 // -------------------------------------------------------------
 // SPONSORS REPOSITORY
 // -------------------------------------------------------------
-export async function getSponsors(): Promise<Sponsor[]> {
+export async function getSponsors(forceRefresh = false): Promise<Sponsor[]> {
+  const now = Date.now();
+  if (!forceRefresh && sponsorsCache && now - sponsorsCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return sponsorsCache.data;
+  }
+
+  let result: Sponsor[] = getStored<Sponsor[]>(STORAGE_KEYS.SPONSORS, []);
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('sponsors').select('*');
-      if (!error && data) return data;
+      if (!error && data) result = data;
     } catch (e) {
       console.warn('Supabase getSponsors error', e);
     }
   }
-  return getStored<Sponsor[]>(STORAGE_KEYS.SPONSORS, []);
+  sponsorsCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
-  const sponsors = await getSponsors();
+  sponsorsCache = null; // Invalidate cache immediately
+  const sponsors = await getSponsors(true);
   const index = sponsors.findIndex((s) => s.id === sponsor.id);
   let updated: Sponsor[];
   if (index >= 0) {
@@ -481,15 +547,36 @@ export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
   return sponsor;
 }
 
+export async function deleteSponsor(id: string): Promise<void> {
+  sponsorsCache = null; // Invalidate cache immediately
+  const sponsors = await getSponsors(true);
+  const filtered = sponsors.filter((s) => s.id !== id);
+  setStored(STORAGE_KEYS.SPONSORS, filtered);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('sponsors').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Supabase deleteSponsor error', e);
+    }
+  }
+}
+
 // -------------------------------------------------------------
 // LOGOS REPOSITORY
 // -------------------------------------------------------------
-export async function getLogos(): Promise<GameLogo[]> {
+export async function getLogos(forceRefresh = false): Promise<GameLogo[]> {
+  const now = Date.now();
+  if (!forceRefresh && logosCache && now - logosCache.timestamp < STATIC_CACHE_TTL_MS) {
+    return logosCache.data;
+  }
+
+  let result: GameLogo[] = getStored<GameLogo[]>(STORAGE_KEYS.LOGOS, []);
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('logos').select('*');
       if (!error && data) {
-        return data.map((l: any) => ({
+        result = data.map((l: any) => ({
           ...l,
           logo_url: l.logo_url || l.url || '',
         }));
@@ -498,11 +585,13 @@ export async function getLogos(): Promise<GameLogo[]> {
       console.warn('Supabase getLogos error', e);
     }
   }
-  return getStored<GameLogo[]>(STORAGE_KEYS.LOGOS, []);
+  logosCache = { data: result, timestamp: now };
+  return result;
 }
 
 export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
-  const logos = await getLogos();
+  logosCache = null; // Invalidate cache immediately
+  const logos = await getLogos(true);
   const index = logos.findIndex((l) => l.id === logo.id);
   let updated: GameLogo[];
   if (index >= 0) {
@@ -530,7 +619,8 @@ export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
 }
 
 export async function deleteLogo(id: string): Promise<void> {
-  const logos = await getLogos();
+  logosCache = null; // Invalidate cache immediately
+  const logos = await getLogos(true);
   const filtered = logos.filter((l) => l.id !== id);
   setStored(STORAGE_KEYS.LOGOS, filtered);
 
@@ -546,16 +636,21 @@ export async function deleteLogo(id: string): Promise<void> {
 // -------------------------------------------------------------
 // MATCHES & ACTIONS REPOSITORY
 // -------------------------------------------------------------
-export async function getMatches(): Promise<Match[]> {
+export async function getMatches(forceRefresh = false): Promise<Match[]> {
+  const now = Date.now();
+  if (!forceRefresh && matchesCache && now - matchesCache.timestamp < MATCHES_CACHE_TTL_MS) {
+    return matchesCache.data;
+  }
+
   const localMatches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
+  let result: Match[] = localMatches;
 
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
       if (!error && data) {
         if (data.length > 0) {
-          // Merge with local matches so actions and fresh local updates are never lost
-          return data.map((sbMatch) => {
+          result = data.map((sbMatch) => {
             const local = localMatches.find((lm) => lm.id === sbMatch.id);
             const sbTime = sbMatch.updated_at ? new Date(sbMatch.updated_at).getTime() : 0;
             const localTime = local?.updated_at ? new Date(local.updated_at).getTime() : 0;
@@ -567,25 +662,29 @@ export async function getMatches(): Promise<Match[]> {
               actions: sbMatch.actions && sbMatch.actions.length > 0 ? sbMatch.actions : local?.actions || [],
             };
           });
-        } else {
-          return localMatches;
         }
       }
     } catch (e) {
       console.warn('Supabase getMatches error', e);
     }
   }
-  return localMatches;
+
+  matchesCache = { data: result, timestamp: now };
+  return result;
 }
 
-export async function getMatchById(id: string): Promise<Match | null> {
+export async function getMatchById(
+  id: string,
+  options: { allowSupabase?: boolean } = { allowSupabase: true }
+): Promise<Match | null> {
   let match: Match | null = null;
 
-  // 1. Check local storage first
+  // 1. Check local storage first (instant, 0 network)
   const localMatches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
   const local = localMatches.find((m) => m.id === id) || null;
 
-  // 2. Try fetching from server API (for OBS Browser Source real-time sync across processes)
+  // 2. Try fetching from server API (/api/matches/${id})
+  // This is local Next.js HTTP - costs 0 Supabase Egress!
   if (typeof window !== 'undefined') {
     try {
       const res = await fetch(`/api/matches/${id}`, { cache: 'no-store' });
@@ -611,15 +710,25 @@ export async function getMatchById(id: string): Promise<Match | null> {
     }
   }
 
-  // 4. Fallback to getMatches() if still not found
-  if (!match) {
-    const matches = await getMatches();
-    match = matches.find((m) => m.id === id) || null;
+  // 4. Targeted fallback to Supabase ONLY if not found and allowed
+  if (!match && options.allowSupabase && isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (!error && data) {
+        match = data;
+      }
+    } catch (e) {
+      console.warn('Supabase getMatchById error', e);
+    }
   }
 
   if (!match) return null;
 
-  // Hydrate related items
+  // Hydrate related items (all resolved from in-memory cache with 0 Supabase calls)
   const [teams, templates, themes, sponsors, heroes] = await Promise.all([
     getTeams(),
     getTemplates(),
@@ -675,7 +784,9 @@ export async function getMatchById(id: string): Promise<Match | null> {
 }
 
 export async function saveMatch(match: Match): Promise<Match> {
-  const matches = await getMatches();
+  matchesCache = null; // Invalidate matches cache immediately
+
+  const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
   const index = matches.findIndex((m) => m.id === match.id);
   let updated: Match[];
   const payload = { ...match, updated_at: new Date().toISOString() };
@@ -687,7 +798,7 @@ export async function saveMatch(match: Match): Promise<Match> {
   }
   setStored(STORAGE_KEYS.MATCHES, updated);
 
-  // Sync to Next.js server API FIRST so any subsequent fetches get fresh data
+  // Sync to Next.js server API FIRST so any subsequent fetches get fresh data from server RAM
   if (typeof window !== 'undefined') {
     try {
       await fetch(`/api/matches/${match.id}`, {
@@ -700,7 +811,7 @@ export async function saveMatch(match: Match): Promise<Match> {
     }
   }
 
-  // Broadcast update immediately to avoid UI delay / flicker
+  // Broadcast update immediately to avoid UI delay / flicker across same-browser tabs (0 network traffic)
   broadcastMatchUpdate(payload);
 
   if (isSupabaseConfigured && supabase) {
@@ -731,7 +842,8 @@ export async function saveMatch(match: Match): Promise<Match> {
 }
 
 export async function deleteMatch(id: string): Promise<void> {
-  const matches = await getMatches();
+  matchesCache = null; // Invalidate matches cache immediately
+  const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
   const filtered = matches.filter((m) => m.id !== id);
   setStored(STORAGE_KEYS.MATCHES, filtered);
 
