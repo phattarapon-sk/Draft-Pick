@@ -20,7 +20,7 @@ export default function MatchControlPage({ params }: MatchControlPageProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getHeroes().then((h) => {
+    getHeroes(true).then((h) => {
       setHeroes(h);
       setLoading(false);
     });

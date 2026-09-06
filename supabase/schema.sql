@@ -333,7 +333,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO templates (id, name, slug, description, canvas_width, canvas_height, config, is_public)
 VALUES
 (
-    '71111111-1111-1111-1111-111111111111',
+    '1',
     'Standard 16:9 Esports Broadcast',
     'standard-16-9',
     'Full 1920x1080 canvas for main streaming feed with top banners.',
@@ -343,7 +343,7 @@ VALUES
     true
 ),
 (
-    '72222222-2222-2222-2222-222222222222',
+    '2',
     'RoV Pro League Official Dock',
     'rpl-official-dock',
     'Bottom dock layout for RoV Pro League broadcast overlay.',

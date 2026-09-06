@@ -205,6 +205,8 @@ export async function saveHero(hero: Hero): Promise<Hero> {
     updatedHeroes = [...heroes, { ...heroWithSafeSlug, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.HEROES, updatedHeroes);
+  // Update cache with locally-known correct data so immediate reads are fresh
+  heroesCache = { data: updatedHeroes, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -223,11 +225,14 @@ export async function saveHero(hero: Hero): Promise<Hero> {
         console.error('Supabase saveHero error:', error);
         throw new Error(error.message);
       }
+      // Invalidate cache after Supabase write so next read gets confirmed server data
+      heroesCache = null;
       if (data && data.length > 0) {
         return data[0];
       }
     } catch (e: any) {
       console.error('Supabase saveHero exception:', e);
+      heroesCache = null;
       throw e;
     }
   }
@@ -239,10 +244,13 @@ export async function deleteHero(id: string): Promise<void> {
   const heroes = await getHeroes(true);
   const filtered = heroes.filter((h) => h.id !== id);
   setStored(STORAGE_KEYS.HEROES, filtered);
+  // Update cache with locally-known correct data
+  heroesCache = { data: filtered, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('heroes').delete().eq('id', id);
+      heroesCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase deleteHero error', e);
     }
@@ -337,6 +345,8 @@ export async function saveTeam(team: Team): Promise<Team> {
     updated = [...teams, { ...teamWithTimestamp, created_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.TEAMS, updated);
+  // Update cache with locally-known correct data
+  teamsCache = { data: updated, timestamp: Date.now() };
 
   // Sync updated team & player photos to existing matches in localStorage & API
   const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
@@ -388,6 +398,7 @@ export async function saveTeam(team: Team): Promise<Team> {
         updated_at: teamWithTimestamp.updated_at,
       };
       await supabase.from('teams').upsert(payload, { onConflict: 'id' });
+      teamsCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase saveTeam error', e);
     }
@@ -398,11 +409,15 @@ export async function saveTeam(team: Team): Promise<Team> {
 export async function deleteTeam(id: string): Promise<void> {
   teamsCache = null; // Invalidate cache immediately
   const teams = await getTeams(true);
-  setStored(STORAGE_KEYS.TEAMS, teams.filter((t) => t.id !== id));
+  const filtered = teams.filter((t) => t.id !== id);
+  setStored(STORAGE_KEYS.TEAMS, filtered);
+  // Update cache with locally-known correct data
+  teamsCache = { data: filtered, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('teams').delete().eq('id', id);
+      teamsCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase deleteTeam error', e);
     }
@@ -443,6 +458,8 @@ export async function saveTheme(theme: Theme): Promise<Theme> {
     updated = [...themes, { ...theme, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.THEMES, updated);
+  // Update cache with locally-known correct data
+  themesCache = { data: updated, timestamp: Date.now() };
   return theme;
 }
 
@@ -491,6 +508,8 @@ export async function saveTemplate(template: Template): Promise<Template> {
     updated = [...templates, { ...template, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.TEMPLATES, updated);
+  // Update cache with locally-known correct data
+  templatesCache = { data: updated, timestamp: Date.now() };
   return template;
 }
 
@@ -528,6 +547,8 @@ export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
     updated = [...sponsors, { ...sponsor, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.SPONSORS, updated);
+  // Update cache with locally-known correct data
+  sponsorsCache = { data: updated, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -540,6 +561,7 @@ export async function saveSponsor(sponsor: Sponsor): Promise<Sponsor> {
         is_active: sponsor.is_active ?? true,
       };
       await supabase.from('sponsors').upsert(payload, { onConflict: 'id' });
+      sponsorsCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase saveSponsor error', e);
     }
@@ -552,10 +574,13 @@ export async function deleteSponsor(id: string): Promise<void> {
   const sponsors = await getSponsors(true);
   const filtered = sponsors.filter((s) => s.id !== id);
   setStored(STORAGE_KEYS.SPONSORS, filtered);
+  // Update cache with locally-known correct data
+  sponsorsCache = { data: filtered, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('sponsors').delete().eq('id', id);
+      sponsorsCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase deleteSponsor error', e);
     }
@@ -601,6 +626,8 @@ export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
     updated = [...logos, { ...logo, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
   }
   setStored(STORAGE_KEYS.LOGOS, updated);
+  // Update cache with locally-known correct data
+  logosCache = { data: updated, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -611,6 +638,7 @@ export async function saveLogo(logo: GameLogo): Promise<GameLogo> {
         is_default: Boolean(logo.is_default),
       };
       await supabase.from('logos').upsert(payload, { onConflict: 'id' });
+      logosCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase saveLogo error', e);
     }
@@ -623,10 +651,13 @@ export async function deleteLogo(id: string): Promise<void> {
   const logos = await getLogos(true);
   const filtered = logos.filter((l) => l.id !== id);
   setStored(STORAGE_KEYS.LOGOS, filtered);
+  // Update cache with locally-known correct data
+  logosCache = { data: filtered, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('logos').delete().eq('id', id);
+      logosCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase deleteLogo error', e);
     }
@@ -697,15 +728,38 @@ export async function getMatchById(
     }
   }
 
-  // 3. Reconcile with local storage: local takes precedence if newer or if API was stale
+  // 3. Reconcile with local storage
+  // CRITICAL: The Supabase `matches` table does NOT store `actions` (they are only in localStorage).
+  // Therefore, even if server data has a newer timestamp, we MUST preserve actions from local.
   if (local) {
     if (!match) {
       match = local;
     } else {
       const localTime = local.updated_at ? new Date(local.updated_at).getTime() : 0;
       const serverTime = match.updated_at ? new Date(match.updated_at).getTime() : 0;
+
+      // Preserve actions from whichever source actually has them
+      const localActions = local.actions && local.actions.length > 0 ? local.actions : [];
+      const serverActions = match.actions && match.actions.length > 0 ? match.actions : [];
+      const bestActions = localActions.length >= serverActions.length ? localActions : serverActions;
+
       if (localTime > serverTime) {
         match = local;
+      } else {
+        // Server data is newer, but always merge local actions since Supabase doesn't store them
+        match = {
+          ...match,
+          actions: bestActions,
+          // Also preserve local-only fields that Supabase doesn't store
+          blue_team: match.blue_team || local.blue_team,
+          red_team: match.red_team || local.red_team,
+          blue_players: match.blue_players || local.blue_players,
+          red_players: match.red_players || local.red_players,
+          template: match.template || local.template,
+          theme: match.theme || local.theme,
+          sponsor: match.sponsor || local.sponsor,
+          sponsors_list: match.sponsors_list || local.sponsors_list,
+        };
       }
     }
   }
@@ -797,6 +851,8 @@ export async function saveMatch(match: Match): Promise<Match> {
     updated = [payload, ...matches];
   }
   setStored(STORAGE_KEYS.MATCHES, updated);
+  // Update cache with locally-known correct data
+  matchesCache = { data: updated, timestamp: Date.now() };
 
   // Sync to Next.js server API FIRST so any subsequent fetches get fresh data from server RAM
   if (typeof window !== 'undefined') {
@@ -838,6 +894,7 @@ export async function saveMatch(match: Match): Promise<Match> {
     }
   }
 
+  matchesCache = null; // Invalidate after all writes complete
   return payload;
 }
 
@@ -846,10 +903,13 @@ export async function deleteMatch(id: string): Promise<void> {
   const matches = getStored<Match[]>(STORAGE_KEYS.MATCHES, []);
   const filtered = matches.filter((m) => m.id !== id);
   setStored(STORAGE_KEYS.MATCHES, filtered);
+  // Update cache with locally-known correct data
+  matchesCache = { data: filtered, timestamp: Date.now() };
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('matches').delete().eq('id', id);
+      matchesCache = null; // Invalidate after Supabase write
     } catch (e) {
       console.warn('Supabase deleteMatch error', e);
     }
