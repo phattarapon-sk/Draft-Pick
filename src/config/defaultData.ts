@@ -92,7 +92,7 @@ export const DEFAULT_THEMES: Theme[] = [
 
 export const DEFAULT_TEMPLATES: Template[] = [
   {
-    id: '72222222-2222-2222-2222-222222222222',
+    id: '2',
     name: '1. RoV Pro League (Official Lower Dock)',
     slug: 'rpl-official-dock',
     description: 'Official Garena RoV Pro League Bottom Dock with open top 65% for 3D stage/camera and full lower-deck hero picks, bans, scores & player names.',
@@ -143,7 +143,7 @@ export const DEFAULT_TEMPLATES: Template[] = [
     },
   },
   {
-    id: '71111111-1111-1111-1111-111111111111',
+    id: '1',
     name: '2. Standard Full Screen (16:9 Standard)',
     slug: 'standard-16-9',
     description: 'Official 5v5 MOBA Esports Broadcast layout with 5 side-by-side hero slots per team and lower ban bays.',

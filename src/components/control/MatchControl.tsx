@@ -653,8 +653,8 @@ export const MatchControl: React.FC<MatchControlProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {[
-                    { id: '72222222-2222-2222-2222-222222222222', slug: 'rpl-official-dock', name: 'RoV Pro League (RPL)', desc: 'ครึ่งจอล่าง (Official Broadcast Dock)' },
-                    { id: '71111111-1111-1111-1111-111111111111', slug: 'standard-16-9', name: 'Standard 16:9 Esports', desc: 'เต็มจอ (Full Screen Overlay)' },
+                    { id: '2', slug: 'rpl-official-dock', name: 'RoV Pro League (RPL)', desc: 'ครึ่งจอล่าง (Official Broadcast Dock)' },
+                    { id: '1', slug: 'standard-16-9', name: 'Standard 16:9 Esports', desc: 'เต็มจอ (Full Screen Overlay)' },
                   ].map((tpl) => {
                     const isSelected =
                       match.template_id === tpl.id ||
