@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Swords, Users, Shield, Layers, Palette, DollarSign, Settings, Radio, Plus, Home, Trophy } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Swords, Users, Shield, Layers, Palette, DollarSign, Settings, Radio, Plus, Home, Trophy, LogOut, User } from 'lucide-react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
   { label: 'Overview & Matches', href: '/dashboard', icon: Swords },
@@ -20,6 +21,35 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const supabase = createBrowserSupabaseClient();
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email ?? null);
+        setUserDisplayName(
+          user.user_metadata?.display_name ||
+          user.user_metadata?.full_name ||
+          user.email?.split('@')[0] || 
+          'Operator'
+        );
+      }
+    };
+    getUser();
+  }, []);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await supabase.auth.signOut();
+    router.replace('/');
+    router.refresh();
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#050816] text-white flex flex-col md:flex-row">
@@ -27,7 +57,7 @@ export default function DashboardLayout({
       <aside className="w-full md:w-64 h-auto md:h-screen bg-[#0B1020] border-b md:border-b-0 md:border-r border-white/10 p-4 flex flex-col justify-between flex-shrink-0 z-30 overflow-y-auto">
         <div className="space-y-6">
           {/* Brand */}
-          <Link href="/" className="flex items-center gap-3 px-2">
+          <Link href="/dashboard" className="flex items-center gap-3 px-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(0,217,255,0.4)]">
               <Swords className="w-4 h-4 text-black stroke-[2.5]" />
             </div>
@@ -73,15 +103,30 @@ export default function DashboardLayout({
           </nav>
         </div>
 
-        {/* Bottom Home link */}
-        <div className="pt-4 border-t border-slate-800/80 mt-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-xs font-mono text-slate-400 hover:text-cyan-400 transition-colors"
+        {/* Bottom: User Info + Logout */}
+        <div className="pt-4 border-t border-slate-800/80 mt-6 space-y-3">
+          {/* User Info */}
+          {userEmail && (
+            <div className="flex items-center gap-2.5 px-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                <User className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate">{userDisplayName}</p>
+                <p className="text-[10px] font-mono text-slate-500 truncate">{userEmail}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all cursor-pointer disabled:opacity-50"
           >
-            <Home className="w-3.5 h-3.5" />
-            <span>Back to Homepage</span>
-          </Link>
+            <LogOut className="w-3.5 h-3.5" />
+            <span>{isLoggingOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ (Logout)'}</span>
+          </button>
         </div>
       </aside>
 
@@ -92,3 +137,4 @@ export default function DashboardLayout({
     </div>
   );
 }
+

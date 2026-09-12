@@ -1,72 +1,104 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Swords,
   Lock,
-  User,
+  Mail,
   Eye,
   EyeOff,
   ArrowRight,
   ShieldCheck,
-  Radio,
-  Sparkles,
-  Play,
-  Zap,
 } from 'lucide-react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
-// Allowed system users
-const VALID_USERS: Record<string, { pass: string; role: string; displayName: string }> = {
-  admin: { pass: 'password123', role: 'admin', displayName: 'Administrator' },
-  livemedia: { pass: 'esport001', role: 'admin', displayName: 'Live Media Operator' },
-};
-
+// Wrapper with Suspense boundary (required by Next.js 14 for useSearchParams)
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen w-full bg-[#050816] flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const supabase = createBrowserSupabaseClient();
+
+  // Check if user already has an active session
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const redirect = searchParams.get('redirect') || '/dashboard';
+        router.replace(redirect);
+      } else {
+        setIsCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanUser = username.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    if (!cleanUser || !cleanPass) {
-      setErrorMsg('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
-      return;
-    }
-
-    const matchedUser = VALID_USERS[cleanUser];
-    if (!matchedUser || matchedUser.pass !== cleanPass) {
-      setErrorMsg('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+    if (!cleanEmail || !cleanPass) {
+      setErrorMsg('กรุณากรอกอีเมลและรหัสผ่าน');
       return;
     }
 
     setIsLoading(true);
     setErrorMsg('');
 
-    // Simulate authenticating to Esports Control Room
-    setTimeout(() => {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          'rov_auth_user',
-          JSON.stringify({
-            username: cleanUser,
-            displayName: matchedUser.displayName,
-            role: matchedUser.role,
-            loggedInAt: Date.now(),
-          })
-        );
+    const { error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPass,
+    });
+
+    if (error) {
+      setIsLoading(false);
+      if (error.message.includes('Invalid login credentials')) {
+        setErrorMsg('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+      } else if (error.message.includes('Email not confirmed')) {
+        setErrorMsg('อีเมลยังไม่ได้ยืนยัน กรุณาตรวจสอบอีเมล');
+      } else {
+        setErrorMsg(`เกิดข้อผิดพลาด: ${error.message}`);
       }
-      router.push('/dashboard');
-    }, 500);
+      return;
+    }
+
+    // Successfully signed in — redirect
+    const redirect = searchParams.get('redirect') || '/dashboard';
+    router.replace(redirect);
+    router.refresh();
   };
+
+  // Show nothing while checking existing session (prevents flash of login form)
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen w-full bg-[#050816] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#050816] text-white flex flex-col justify-between items-center relative overflow-hidden font-sans selection:bg-cyan-500 selection:text-black">
@@ -126,22 +158,22 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
-            {/* Username / Email */}
+            {/* Email */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                <span>ชื่อผู้ใช้ / อีเมล (Username)</span>
+                <span>อีเมล (Email)</span>
               </label>
               <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
-                  type="text"
-                  name="user_account_id"
-                  id="user_account_id"
-                  autoComplete="off"
+                  type="email"
+                  name="email"
+                  id="login_email"
+                  autoComplete="email"
                   required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin หรือ livemedia..."
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="กรอกอีเมลของคุณ"
                   className="w-full bg-[#131B2E] border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400 transition-colors font-medium"
                 />
               </div>
@@ -151,17 +183,14 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                 <span>รหัสผ่าน (Password)</span>
-                <span className="text-[11px] text-cyan-400 hover:underline cursor-pointer">
-                  ลืมรหัสผ่าน?
-                </span>
               </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  name="user_account_secret"
-                  id="user_account_secret"
-                  autoComplete="new-password"
+                  name="password"
+                  id="login_password"
+                  autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
