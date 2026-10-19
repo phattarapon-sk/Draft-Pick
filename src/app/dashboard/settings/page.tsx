@@ -18,6 +18,15 @@ import {
   Shield,
   Clock,
   Music,
+  Database,
+  Activity,
+  Wifi,
+  RefreshCw,
+  Copy,
+  CheckCircle2,
+  AlertTriangle,
+  Server,
+  Globe,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -42,6 +51,15 @@ export default function SettingsPage() {
   const [resetSuccess, setResetSuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Supabase Keep-Alive State
+  const [supabaseStatus, setSupabaseStatus] = useState<'idle' | 'checking' | 'active' | 'error' | 'unconfigured'>('idle');
+  const [pingLatency, setPingLatency] = useState<number | null>(null);
+  const [lastPingTime, setLastPingTime] = useState<string | null>(null);
+  const [pingMessage, setPingMessage] = useState<string>('');
+  const [autoPingEnabled, setAutoPingEnabled] = useState<boolean>(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [originUrl, setOriginUrl] = useState<string>('');
+
   // Load stored settings on mount
   useEffect(() => {
     try {
@@ -60,10 +78,68 @@ export default function SettingsPage() {
         if (parsed.enableGlowEffects !== undefined) setEnableGlowEffects(parsed.enableGlowEffects);
         if (parsed.chromaKeyColor !== undefined) setChromaKeyColor(parsed.chromaKeyColor);
       }
+
+      if (typeof window !== 'undefined') {
+        setOriginUrl(window.location.origin);
+        const savedAutoPing = localStorage.getItem('rov_supabase_auto_ping');
+        if (savedAutoPing !== null) {
+          setAutoPingEnabled(savedAutoPing === 'true');
+        }
+        const savedLastPing = localStorage.getItem('rov_supabase_last_ping');
+        if (savedLastPing) {
+          setLastPingTime(savedLastPing);
+        }
+      }
     } catch (e) {
       console.error('Error loading settings', e);
     }
   }, []);
+
+  const handlePingSupabase = async () => {
+    setSupabaseStatus('checking');
+    try {
+      const res = await fetch('/api/keep-alive', { method: 'POST', cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data.status === 'active') {
+        setSupabaseStatus('active');
+        setPingLatency(data.durationMs);
+        setPingMessage(data.message || 'Database actively responding');
+        const nowStr = new Date().toLocaleString('th-TH');
+        setLastPingTime(nowStr);
+        localStorage.setItem('rov_supabase_last_ping', nowStr);
+      } else if (data.status === 'unconfigured') {
+        setSupabaseStatus('unconfigured');
+        setPingMessage('Supabase ยังไม่ได้ตั้งค่าใน .env (ระบบใช้งานผ่าน LocalStorage ออฟไลน์)');
+      } else {
+        setSupabaseStatus('error');
+        setPingMessage(data.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ Supabase');
+      }
+    } catch (err: any) {
+      setSupabaseStatus('error');
+      setPingMessage(err?.message || 'Network connection error');
+    }
+  };
+
+  // Browser auto-ping interval (every 30 minutes if dashboard tab is open and enabled)
+  useEffect(() => {
+    if (!autoPingEnabled) return;
+    handlePingSupabase();
+    const interval = setInterval(() => {
+      handlePingSupabase();
+    }, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [autoPingEnabled]);
+
+  const handleToggleAutoPing = (enabled: boolean) => {
+    setAutoPingEnabled(enabled);
+    localStorage.setItem('rov_supabase_auto_ping', String(enabled));
+  };
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   const handleSaveSettings = () => {
     const settingsObj = {
@@ -401,6 +477,172 @@ export default function SettingsPage() {
                 {resetSuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <RotateCcw className="w-4 h-4" />}
                 <span>{resetSuccess ? 'Default Seed Restored!' : 'Reset All Local Mock Database'}</span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Supabase Anti-Sleep & Keep-Alive System */}
+        <div className="md:col-span-2 rounded-2xl bg-[#0B1020] border border-emerald-500/30 p-6 space-y-6 shadow-[0_0_30px_rgba(16,185,129,0.08)] relative overflow-hidden group">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Database className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                  Supabase Anti-Sleep & Keep-Alive System
+                </h3>
+                <p className="text-xs text-slate-400 font-mono">
+                  ระบบป้องกันฐานข้อมูล Supabase Free Tier หยุดทำงาน (Auto-Pause) เมื่อไม่มีการใช้งานเกิน 7 วัน
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/30 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" /> 24/7 ANTI-PAUSE SHIELD
+              </span>
+            </div>
+          </div>
+
+          {/* Live Status & Ping Control Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Status Indicator */}
+            <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+              <span className="text-[11px] font-mono text-slate-400 font-bold uppercase block mb-1">
+                สถานะการเชื่อมต่อ (Status)
+              </span>
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${
+                  supabaseStatus === 'active' ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' :
+                  supabaseStatus === 'checking' ? 'bg-amber-400 animate-ping' :
+                  supabaseStatus === 'error' ? 'bg-red-400' :
+                  supabaseStatus === 'unconfigured' ? 'bg-slate-500' :
+                  'bg-emerald-400/60'
+                }`} />
+                <span className="text-sm font-black text-white">
+                  {supabaseStatus === 'active' && 'Active (ฐานข้อมูลออนไลน์)'}
+                  {supabaseStatus === 'checking' && 'กำลังยิง Ping...'}
+                  {supabaseStatus === 'error' && 'พบข้อผิดพลาด'}
+                  {supabaseStatus === 'unconfigured' && 'Offline / LocalStorage Mode'}
+                  {supabaseStatus === 'idle' && 'พร้อมทำงาน (Standby)'}
+                </span>
+              </div>
+              {pingLatency !== null && (
+                <div className="mt-2 text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5" /> Latency: {pingLatency}ms
+                </div>
+              )}
+            </div>
+
+            {/* Last Ping Timestamp */}
+            <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+              <span className="text-[11px] font-mono text-slate-400 font-bold uppercase block mb-1">
+                ส่งสัญญาณกระตุ้นล่าสุด (Last Ping)
+              </span>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-mono font-bold text-slate-200">
+                  {lastPingTime || 'ยังไม่มีการทดสอบในรอบนี้'}
+                </span>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-500 font-mono truncate">
+                {pingMessage || 'ส่งสัญญาณเพื่อรีเซ็ต Inactivity Timer'}
+              </p>
+            </div>
+
+            {/* Manual Ping Action Button */}
+            <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-center">
+              <button
+                onClick={handlePingSupabase}
+                disabled={supabaseStatus === 'checking'}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs uppercase shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${supabaseStatus === 'checking' ? 'animate-spin' : ''}`} />
+                <span>{supabaseStatus === 'checking' ? 'Pinging Supabase...' : 'Ping Supabase Now (ยิงกระตุ้นทันที)'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3 Protection Strategies */}
+          <div className="space-y-4 pt-2">
+            <h4 className="text-xs font-mono text-slate-300 font-bold uppercase flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-400" /> ช่องทางการป้องกัน Supabase ดับ 3 ระดับ
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Method 1: GitHub Actions */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Server className="w-4 h-4 text-cyan-400" /> 1. GitHub Actions
+                  </span>
+                  <span className="text-[9px] font-mono bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/50">
+                    แนะนำ (ฟรี 100%)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  ตั้งเวลาผ่าน Cloud อัตโนมัติทุกๆ 3 วัน ไม่ต้องเปิดคอมหรือเว็บไซต์ทิ้งไว้ ติดตั้งไฟล์ <code className="text-cyan-300 font-mono text-[10px]">.github/workflows/supabase-keepalive.yml</code> ให้เรียบร้อยแล้ว
+                </p>
+                <div className="pt-1">
+                  <button
+                    onClick={() => copyToClipboard('npm run keep-alive', 'npm-script')}
+                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-[11px] font-mono text-slate-300 transition-all cursor-pointer"
+                  >
+                    <span>npm run keep-alive</span>
+                    {copiedKey === 'npm-script' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Method 2: Browser Auto-Ping */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-emerald-400" /> 2. Browser Auto-Ping
+                  </span>
+                  <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/50">
+                    อัตโนมัติในแท็บนี้
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  เมื่อเปิดหน้า Dashboard แท็บนี้ทิ้งไว้ ระบบจะส่งสัญญาณ Ping อัตโนมัติทุกๆ 30 นาทีเพื่อกระตุ้น Database
+                </p>
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer hover:border-slate-700">
+                  <span className="text-[11px] font-bold text-slate-300">เปิด Auto-Ping ในแท็บนี้</span>
+                  <input
+                    type="checkbox"
+                    checked={autoPingEnabled}
+                    onChange={(e) => handleToggleAutoPing(e.target.checked)}
+                    className="w-4 h-4 rounded accent-emerald-400 cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Method 3: External Cron Job */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-purple-400" /> 3. External Cron Job
+                  </span>
+                  <span className="text-[9px] font-mono bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800/50">
+                    cron-job.org / Vercel
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  มี API Route <code className="text-purple-300 font-mono text-[10px]">/api/keep-alive</code> พร้อมใช้ สามารถนำ URL ไปใส่ในเว็บฟรี เช่น cron-job.org หรือ UptimeRobot
+                </p>
+                <div className="pt-1">
+                  <button
+                    onClick={() => copyToClipboard(`${originUrl || 'https://your-domain.com'}/api/keep-alive`, 'api-url')}
+                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-purple-500/50 text-[11px] font-mono text-purple-300 transition-all cursor-pointer truncate"
+                  >
+                    <span className="truncate">/api/keep-alive</span>
+                    {copiedKey === 'api-url' ? <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

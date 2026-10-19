@@ -1,0 +1,36 @@
+name: Supabase Keep-Alive (Anti-Sleep)
+
+on:
+  # รันอัตโนมัติทุกๆ 3 วัน เวลา 04:00 UTC (11:00 น. เวลาไทย)
+  # Supabase Free Tier จะ Sleep หากไม่มี Request เกิน 7 วัน ดังนั้น 3 วันจึงปลอดภัย 100%
+  schedule:
+    - cron: '0 4 */3 * *'
+  
+  # เปิดให้สามารถกด Run workflow เองได้ตลอดเวลาผ่าน GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Database & Reset Inactivity Timer
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --omit=dev
+
+      - name: Execute Supabase Keep-Alive
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.SUPABASE_URL || 'https://qckbfvrdkjhfvsyopmdu.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run keep-alive
