@@ -1,14 +1,13 @@
 /**
- * Supabase Keep-Alive Script
+ * Supabase Keep-Alive Script (Zero-Dependency & Fail-Safe)
  * ป้องกัน Supabase Free Tier หยุดทำงาน (Auto-Pause) เมื่อไม่มีการใช้งานเกิน 7 วัน
- * รันสคริปต์นี้เป็นประจำผ่าน GitHub Actions หรือ Cron Job
+ * ทำงานได้ทั้งในเครื่อง และบน GitHub Actions Cloud โดยไม่ต้องติดตั้งแพ็กเกจเพิ่ม
  */
 
 const fs = require('fs');
 const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
 
-// Helper to load env vars from .env.local or .env if present
+// พยายามอ่านจาก .env.local หรือ .env ในเครื่องก่อน
 function loadEnv() {
   const envFiles = ['.env.local', '.env'];
   for (const file of envFiles) {
@@ -35,77 +34,102 @@ function loadEnv() {
 
 loadEnv();
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// ค่า Default จากโปรเจกต์ (Public Anon Key ปลอดภัยในการใช้ใน Client)
+const DEFAULT_SUPABASE_URL = 'https://qckbfvrdkjhfvsyopmdu.supabase.co';
+const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFja2JmdnJka2poZnZzeW9wbWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NzIxMjIsImV4cCI6MjEwNDI0ODEyMn0.u6dnHbLbGPzzhRGbdV5QrxCyT9Qud1TzuhBJCuf1HBc';
 
-const apiKey = serviceRoleKey || supabaseAnonKey;
+const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
+               process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+               process.env.SUPABASE_ANON_KEY || 
+               DEFAULT_ANON_KEY;
+
+async function pingTable(tableName) {
+  const endpoint = `${supabaseUrl}/rest/v1/${tableName}?select=id&limit=1`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'apikey': apiKey,
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/json',
+      'Range-Unit': 'items',
+      'Range': '0-0'
+    }
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => '');
+    throw new Error(`Table ${tableName} returned ${res.status}: ${errorText || res.statusText}`);
+  }
+
+  const data = await res.json().catch(() => []);
+  return data;
+}
 
 async function runKeepAlive() {
   const startTime = Date.now();
   console.log('----------------------------------------------------');
-  console.log('⚡ [Supabase Keep-Alive] Initializing health check...');
+  console.log('⚡ [Supabase Keep-Alive] Initializing health ping...');
   console.log(`⏰ Time: ${new Date().toISOString()}`);
+  console.log(`🌐 Target: ${supabaseUrl}`);
 
   if (!supabaseUrl || !apiKey) {
-    console.error('❌ Missing SUPABASE_URL or SUPABASE_KEY in environment variables.');
-    console.log('ℹ️ Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+    console.error('❌ Supabase URL or API Key is missing.');
     process.exit(1);
   }
 
-  console.log(`🌐 Supabase Target URL: ${supabaseUrl}`);
+  const tables = ['heroes', 'teams', 'themes', 'templates'];
+  let success = false;
+  let lastError = null;
 
-  try {
-    const supabase = createClient(supabaseUrl, apiKey, {
-      auth: { persistSession: false }
-    });
-
-    // 1. Query a lightweight table to generate active PostgreSQL database activity
-    console.log('📡 Sending database ping query to PostgreSQL...');
-    
-    // We try to query heroes, teams, or themes (limit 1)
-    let pingResult = await supabase.from('heroes').select('id, name').limit(1);
-    
-    if (pingResult.error) {
-      // Fallback query to teams
-      pingResult = await supabase.from('teams').select('id, name').limit(1);
+  for (const table of tables) {
+    try {
+      console.log(`📡 Querying table '${table}' via PostgreSQL REST API...`);
+      const data = await pingTable(table);
+      const duration = Date.now() - startTime;
+      console.log(`✅ Success! Table '${table}' responded in ${duration}ms`);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`📊 Sample record found:`, data[0]);
+      }
+      success = true;
+      break;
+    } catch (err) {
+      lastError = err;
+      console.warn(`⚠️ Query to '${table}' failed: ${err.message}`);
     }
+  }
 
-    if (pingResult.error) {
-      // Fallback query to themes
-      pingResult = await supabase.from('themes').select('id, name').limit(1);
-    }
-
-    const duration = Date.now() - startTime;
-
-    if (pingResult.error) {
-      console.warn(`⚠️ Table query failed: ${pingResult.error.message}`);
-      console.log('🔄 Attempting fallback REST health check via fetch...');
-      
-      const restRes = await fetch(`${supabaseUrl}/rest/v1/`, {
+  if (!success) {
+    // Fallback: ping root REST endpoint
+    try {
+      console.log('🔄 Trying root REST API endpoint ping...');
+      const rootRes = await fetch(`${supabaseUrl}/rest/v1/`, {
         headers: {
-          apikey: apiKey,
-          Authorization: `Bearer ${apiKey}`
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`
         }
       });
-
-      if (!restRes.ok && restRes.status !== 200) {
-        throw new Error(`REST endpoint responded with status: ${restRes.status} ${restRes.statusText}`);
+      const duration = Date.now() - startTime;
+      if (rootRes.ok || rootRes.status === 200) {
+        console.log(`✅ Root REST endpoint responded in ${duration}ms (Status: ${rootRes.status})`);
+        success = true;
+      } else {
+        throw new Error(`Root endpoint failed with status ${rootRes.status}`);
       }
-
-      console.log(`✅ Supabase REST API Ping Succeeded! (${duration}ms)`);
-    } else {
-      console.log(`✅ Supabase Database Query Succeeded! (${duration}ms)`);
-      console.log(`📊 Sample record found:`, pingResult.data && pingResult.data.length > 0 ? pingResult.data[0] : 'Table empty, but DB active');
+    } catch (err) {
+      lastError = err;
     }
+  }
 
-    console.log(`🎉 Keep-Alive Success! Inactivity timer refreshed. Project will remain ACTIVE.`);
+  const totalDuration = Date.now() - startTime;
+  if (success) {
+    console.log(`🎉 Keep-Alive Successful! (${totalDuration}ms)`);
+    console.log('🚀 Inactivity timer refreshed. Supabase will remain ACTIVE.');
     console.log('----------------------------------------------------');
     process.exit(0);
-  } catch (err) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Keep-Alive Ping Failed after ${duration}ms:`, err.message || err);
+  } else {
+    console.error(`❌ Keep-Alive Failed after ${totalDuration}ms:`, lastError?.message || lastError);
     console.log('----------------------------------------------------');
     process.exit(1);
   }
